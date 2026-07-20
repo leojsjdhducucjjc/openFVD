@@ -20,14 +20,40 @@
 #include <QtDebug>
 #include <QFile>
 #include <QTextStream>
+#include <QFileOpenEvent>
 #include "mainwindow.h"
 #include "lenassert.h"
 
-QApplication* application;
+class FvdApplication : public QApplication
+{
+public:
+    FvdApplication(int& argc, char** argv) : QApplication(argc, argv), mainWindow(NULL) {}
 
-#ifdef Q_OS_MAC
-#include "osx/NSApplicationMain.h"
-#endif
+    void setMainWindow(MainWindow* window)
+    {
+        mainWindow = window;
+        if(!pendingFile.isEmpty()) {
+            mainWindow->openProjectFromFinder(pendingFile);
+            pendingFile.clear();
+        }
+    }
+
+protected:
+    bool event(QEvent* event)
+    {
+        if(event->type() == QEvent::FileOpen) {
+            const QString fileName = static_cast<QFileOpenEvent*>(event)->file();
+            if(mainWindow) mainWindow->openProjectFromFinder(fileName);
+            else pendingFile = fileName;
+            return true;
+        }
+        return QApplication::event(event);
+    }
+
+private:
+    MainWindow* mainWindow;
+    QString pendingFile;
+};
 
 void myMessageHandler(QtMsgType type, const QMessageLogContext &, const QString &msg)
 {
@@ -66,7 +92,7 @@ void myMessageHandler(QtMsgType type, const QMessageLogContext &, const QString 
 
 int main(int argc, char *argv[])
 {
-    application = new QApplication(argc, argv);
+    FvdApplication application(argc, argv);
 #ifndef Q_OS_MAC
     qInstallMessageHandler(myMessageHandler);
 
@@ -85,6 +111,7 @@ int main(int argc, char *argv[])
 #endif
 
     MainWindow w;
+    application.setMainWindow(&w);
     w.show();
     if(argc == 2) {
         QString fileName(argv[1]);
@@ -95,9 +122,5 @@ int main(int argc, char *argv[])
     }
 
 
-#ifdef Q_OS_MAC
-    return OwnNSApplicationMain(argc, (const char **)argv);
-#else
-    return application->exec();
-#endif
+    return application.exec();
 }

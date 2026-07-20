@@ -481,8 +481,8 @@ int track::exportTrack2(fstream *file, float mPerNode, int fromIndex, int toInde
         glm::vec3 vLastLat = anchor->vLatHeart(fHeart);
 
         glm::vec3 rotateAxis = glm::cross(anchor->vDirHeart(fHeart), V);
-        glm::vec3 rotated = glm::vec3(glm::rotate(glm::angle(anchor->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
-        temp = glm::angle(rotated, vHeartLat)*F_PI/180.f;
+        glm::vec3 rotated = glm::vec3(glm::rotate(glm::mat4(1.0f), fvdVectorAngle(anchor->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
+        temp = fvdVectorAngle(rotated, vHeartLat);
         if(glm::dot(glm::cross(rotated, vHeartLat), V) > 0)
         {
             temp *= -1.f;
@@ -536,8 +536,8 @@ int track::exportTrack2(fstream *file, float mPerNode, int fromIndex, int toInde
             glm::vec3 vLastLat = getPoint(exportPoints[i-1])->vLatHeart(fHeart);
 
             glm::vec3 rotateAxis = glm::cross(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V);
-            glm::vec3 rotated = glm::vec3(glm::rotate(glm::angle(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
-            temp = glm::angle(rotated, vHeartLat)*F_PI/180.f;
+            glm::vec3 rotated = glm::vec3(glm::rotate(glm::mat4(1.0f), fvdVectorAngle(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
+            temp = fvdVectorAngle(rotated, vHeartLat);
             if(glm::dot(glm::cross(rotated, vHeartLat), V) > 0)
             {
                 temp *= -1.f;
@@ -592,8 +592,8 @@ int track::exportTrack2(fstream *file, float mPerNode, int fromIndex, int toInde
         glm::vec3 vLastLat = getPoint(exportPoints[i-1])->vLatHeart(fHeart);
 
         glm::vec3 rotateAxis = glm::cross(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V);
-        glm::vec3 rotated = glm::vec3(glm::rotate(glm::angle(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
-        temp = glm::angle(rotated, vHeartLat)*F_PI/180.f;
+        glm::vec3 rotated = glm::vec3(glm::rotate(glm::mat4(1.0f), fvdVectorAngle(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
+        temp = fvdVectorAngle(rotated, vHeartLat);
         if(glm::dot(glm::cross(rotated, vHeartLat), V) > 0)
         {
             temp *= -1.f;
@@ -644,8 +644,8 @@ int track::exportTrack2(fstream *file, float mPerNode, int fromIndex, int toInde
         glm::vec3 vLastLat = getPoint(exportPoints[i-1])->vLatHeart(fHeart);
 
         glm::vec3 rotateAxis = glm::cross(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V);
-        glm::vec3 rotated = glm::vec3(glm::rotate(glm::angle(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
-        temp = glm::angle(rotated, vHeartLat)*F_PI/180.f;
+        glm::vec3 rotated = glm::vec3(glm::rotate(glm::mat4(1.0f), fvdVectorAngle(getPoint(exportPoints[i-1])->vDirHeart(fHeart), V), rotateAxis)*glm::vec4(vLastLat, 0.f));
+        temp = fvdVectorAngle(rotated, vHeartLat);
         if(glm::dot(glm::cross(rotated, vHeartLat), V) > 0)
         {
             temp *= -1.f;
@@ -895,9 +895,9 @@ void track::exportNL2Track(FILE *file, float mPerNode, int fromIndex, int toInde
             glm::vec3 dp = getPoint(npoint)->vPos - getPoint(ppoint)->vPos;
             glm::vec3 dv = getPoint(npoint)->vDir + getPoint(ppoint)->vDir;
 
-            float a = glm::length2(dv)-1.f;
+            float a = glm::dot(dv, dv)-1.f;
             float b = glm::dot(dv, dp)*2.f;
-            float c = glm::length2(dp);
+            float c = glm::dot(dp, dp);
 
             b /= a;
             c /= a;
@@ -969,11 +969,7 @@ QString track::saveTrack(fstream& file, trackWidget* _widget)
 {   
     file << "TRC";
 
-    int namelength = name.length();
-    std::string stdName = name.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << stdName;
+    writeQString(&file, name);
 
     writeBytes(&file, (const char*)&(_widget->inTrack->trackColors), 3*sizeof(QColor));
 
@@ -1025,7 +1021,7 @@ QString track::saveTrack(fstream& file, trackWidget* _widget)
 QString track::loadTrack(fstream& file, trackWidget* _widget)
 {
     int namelength = readInt(&file);
-    name = QString(readString(&file, namelength).c_str());
+    name = readQString(&file, namelength);
 
     readBytes(&file, &_widget->inTrack->trackColors, 3*sizeof(QColor));
 
@@ -1061,6 +1057,9 @@ QString track::loadTrack(fstream& file, trackWidget* _widget)
     string temp;
     //gloParent->treeInit(this);
     int size = readInt(&file);
+    if(!file || size < 0 || size > 100000) {
+        return QString("Error while Loading: Invalid segment count!");
+    }
     for(int i = 0; i < size; ++i)
     {
         temp = readString(&file, 3);
@@ -1119,6 +1118,9 @@ QString track::loadTrack(fstream& file, trackWidget* _widget)
     }
 
     size = readInt(&file);
+    if(!file || size < 0 || size > 100000) {
+        return QString("Error while Loading: Invalid smoothing count!");
+    }
     for(int i = 0; i < size; ++i)
     {
         if(i >= smoothList.size()) smoothList.append(new smoothHandler(this, -2));
@@ -1143,7 +1145,7 @@ QString track::loadTrack(fstream& file, trackWidget* _widget)
 QString track::legacyLoadTrack(fstream& file, trackWidget* _widget)
 {
     int namelength = readInt(&file);
-    name = QString(readString(&file, namelength).c_str());
+    name = readQString(&file, namelength);
 
     readBytes(&file, &_widget->inTrack->trackColors, 3*sizeof(QColor));
 
@@ -1179,6 +1181,9 @@ QString track::legacyLoadTrack(fstream& file, trackWidget* _widget)
     string temp;
     //gloParent->treeInit(this);
     int size = readInt(&file);
+    if(!file || size < 0 || size > 100000) {
+        return QString("Error while Loading: Invalid segment count!");
+    }
     for(int i = 0; i < size; ++i)
     {
         temp = readString(&file, 3);
@@ -1237,6 +1242,9 @@ QString track::legacyLoadTrack(fstream& file, trackWidget* _widget)
     }
 
     size = readInt(&file);
+    if(!file || size < 0 || size > 100000) {
+        return QString("Error while Loading: Invalid smoothing count!");
+    }
     for(int i = 0; i < size; ++i)
     {
         if(i >= smoothList.size()) smoothList.append(new smoothHandler(this, -2));

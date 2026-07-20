@@ -19,7 +19,14 @@
 
 #include "exportfuncs.h"
 
+#include <cstring>
+#include <QByteArray>
+
 using namespace std;
+
+namespace {
+const size_t kMaximumSerializedStringLength = 16 * 1024 * 1024;
+}
 
 void writeBytes(fstream *file, const char* data, size_t length )
 {
@@ -38,13 +45,34 @@ void writeNulls(fstream *file , size_t length )
 
 string readString(fstream *file, size_t length)
 {
-    string temp = "";
-    char c;
-    for(size_t i = 0; i < length; ++i) {
-        file->get(c);
-        temp.append(1, c);
+    if(length > kMaximumSerializedStringLength) {
+        file->setstate(ios::failbit);
+        return string();
     }
+
+    string temp(length, '\0');
+    if(length) file->read(&temp[0], static_cast<streamsize>(length));
+    if(!*file) return string();
     return temp;
+}
+
+void writeQString(fstream *file, const QString& value)
+{
+    const QByteArray utf8 = value.toUtf8();
+    const int length = utf8.size();
+    writeBytes(file, reinterpret_cast<const char*>(&length), sizeof(length));
+    if(length) file->write(utf8.constData(), length);
+}
+
+QString readQString(fstream *file, int length)
+{
+    if(length < 0) {
+        file->setstate(ios::failbit);
+        return QString();
+    }
+    const string utf8 = readString(file, static_cast<size_t>(length));
+    if(!*file) return QString();
+    return QString::fromUtf8(utf8.data(), static_cast<int>(utf8.size()));
 }
 
 bool readNulls(fstream *file, size_t length)
@@ -67,12 +95,12 @@ float readFloat(fstream *file)
     union {
         char c[4];
         float f;
-    } temp;
+    } temp = {};
     file->get(temp.c[3]);
     file->get(temp.c[2]);
     file->get(temp.c[1]);
     file->get(temp.c[0]);
-    return temp.f;
+    return *file ? temp.f : 0.0f;
 }
 
 int readInt(fstream *file)
@@ -80,23 +108,24 @@ int readInt(fstream *file)
     union {
         char c[4];
         int i;
-    } temp;
+    } temp = {};
     file->get(temp.c[3]);
     file->get(temp.c[2]);
     file->get(temp.c[1]);
     file->get(temp.c[0]);
-    return temp.i;
+    return *file ? temp.i : 0;
 }
 
 bool readBool(fstream *file)
 {
-    char temp;
+    char temp = 0;
     file->get(temp);
-    return temp != 0;
+    return *file && temp != 0;
 }
 
 void readBytes(fstream *file, void* _ptr, size_t length)
 {
+    memset(_ptr, 0, length);
     for(size_t i = 0; i < length; i++) {
         file->read((char*)_ptr+length-1-i, 1);
     }
@@ -120,13 +149,34 @@ void writeNulls(stringstream *file , size_t length )
 
 string readString(stringstream *file, size_t length)
 {
-    string temp = "";
-    char c;
-    for(size_t i = 0; i < length; ++i) {
-        file->get(c);
-        temp.append(1, c);
+    if(length > kMaximumSerializedStringLength) {
+        file->setstate(ios::failbit);
+        return string();
     }
+
+    string temp(length, '\0');
+    if(length) file->read(&temp[0], static_cast<streamsize>(length));
+    if(!*file) return string();
     return temp;
+}
+
+void writeQString(stringstream *file, const QString& value)
+{
+    const QByteArray utf8 = value.toUtf8();
+    const int length = utf8.size();
+    writeBytes(file, reinterpret_cast<const char*>(&length), sizeof(length));
+    if(length) file->write(utf8.constData(), length);
+}
+
+QString readQString(stringstream *file, int length)
+{
+    if(length < 0) {
+        file->setstate(ios::failbit);
+        return QString();
+    }
+    const string utf8 = readString(file, static_cast<size_t>(length));
+    if(!*file) return QString();
+    return QString::fromUtf8(utf8.data(), static_cast<int>(utf8.size()));
 }
 
 bool readNulls(stringstream *file, size_t length)
@@ -150,12 +200,12 @@ float readFloat(stringstream *file)
     union {
         char c[4];
         float f;
-    } temp;
+    } temp = {};
     file->get(temp.c[3]);
     file->get(temp.c[2]);
     file->get(temp.c[1]);
     file->get(temp.c[0]);
-    return temp.f;
+    return *file ? temp.f : 0.0f;
 }
 
 int readInt(stringstream *file)
@@ -163,23 +213,24 @@ int readInt(stringstream *file)
     union {
         char c[4];
         int i;
-    } temp;
+    } temp = {};
     file->get(temp.c[3]);
     file->get(temp.c[2]);
     file->get(temp.c[1]);
     file->get(temp.c[0]);
-    return temp.i;
+    return *file ? temp.i : 0;
 }
 
 bool readBool(stringstream *file)
 {
-    char temp;
+    char temp = 0;
     file->get(temp);
-    return temp != 0;
+    return *file && temp != 0;
 }
 
 void readBytes(stringstream *file, void* _ptr, size_t length)
 {
+    memset(_ptr, 0, length);
     for(size_t i = 0; i < length; i++) {
         file->read((char*)_ptr+length-1-i, 1);
     }

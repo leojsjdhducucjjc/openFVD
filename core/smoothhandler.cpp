@@ -162,11 +162,7 @@ void smoothHandler::setIterations(int _arg)
 void smoothHandler::saveSmooth(std::fstream& file)
 {
     QString name = treeItem->text(1);
-    int namelength = name.length();
-    std::string stdName = name.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << stdName;
+    writeQString(&file, name);
 
     writeBytes(&file, (const char*)&fromNode, sizeof(int));
     writeBytes(&file, (const char*)&toNode, sizeof(int));
@@ -178,7 +174,7 @@ void smoothHandler::saveSmooth(std::fstream& file)
 void smoothHandler::loadSmooth(std::fstream &file)
 {
     int namelength = readInt(&file);
-    QString name = QString(readString(&file, namelength).c_str());
+    QString name = readQString(&file, namelength);
 
     treeItem->setText(1, name);
 
@@ -194,7 +190,7 @@ void smoothHandler::loadSmooth(std::fstream &file)
 void smoothHandler::legacyLoadSmooth(std::fstream &file)
 {
     int namelength = readInt(&file);
-    QString name = QString(readString(&file, namelength).c_str());
+    QString name = readQString(&file, namelength);
 
     treeItem->setText(1, name);
 

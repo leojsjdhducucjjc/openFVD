@@ -281,11 +281,7 @@ int secbezier::updateSection(int node)
 void secbezier::saveSection(std::fstream& file)
 {
     file << "BEZ";
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     int bezcount = bezList.size();
     writeBytes(&file, (const char*)&bezcount, sizeof(int));
@@ -310,9 +306,13 @@ void secbezier::saveSection(std::fstream& file)
 void secbezier::loadSection(std::fstream& file)
 {
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
     int bezcount = readInt(&file);
+    if(!file || bezcount < 0 || bezcount > 1000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     for(int i = 0; i < bezcount; ++i)
     {
         bezList.append(new bezier_t);
@@ -326,6 +326,10 @@ void secbezier::loadSection(std::fstream& file)
     }
 
     int supcount = readInt(&file);
+    if(!file || supcount < 0 || supcount > 1000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     for(int i = 0; i < supcount; ++i)
     {
         supList.append(readVec3(&file));
@@ -335,9 +339,13 @@ void secbezier::loadSection(std::fstream& file)
 void secbezier::legacyLoadSection(std::fstream& file)
 {
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
     int bezcount = readInt(&file);
+    if(!file || bezcount < 0 || bezcount > 1000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     for(int i = 0; i < bezcount; ++i)
     {
         bezList.append(new bezier_t);
@@ -351,6 +359,10 @@ void secbezier::legacyLoadSection(std::fstream& file)
     }
 
     int supcount = readInt(&file);
+    if(!file || supcount < 0 || supcount > 1000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     for(int i = 0; i < supcount; ++i)
     {
         supList.append(readVec3(&file));
@@ -360,11 +372,7 @@ void secbezier::legacyLoadSection(std::fstream& file)
 void secbezier::saveSection(std::stringstream& file)
 {
     file << "BEZ";
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     int bezcount = bezList.size();
     writeBytes(&file, (const char*)&bezcount, sizeof(int));
@@ -389,9 +397,13 @@ void secbezier::saveSection(std::stringstream& file)
 void secbezier::loadSection(std::stringstream& file)
 {
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
     int bezcount = readInt(&file);
+    if(!file || bezcount < 0 || bezcount > 1000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     for(int i = 0; i < bezcount; ++i)
     {
         bezList.append(new bezier_t);
@@ -405,6 +417,10 @@ void secbezier::loadSection(std::stringstream& file)
     }
 
     int supcount = readInt(&file);
+    if(!file || supcount < 0 || supcount > 1000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     for(int i = 0; i < supcount; ++i)
     {
         supList.append(readVec3(&file));

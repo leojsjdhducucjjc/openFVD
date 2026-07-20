@@ -19,6 +19,13 @@
 #include "saver.h"
 
 #include <fstream>
+#include <cstdio>
+#include <cerrno>
+#include <cstring>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryFile>
 #include "exportfuncs.h"
 
 using namespace std;
@@ -32,22 +39,54 @@ saver::saver(const QString& fileName, projectWidget* _project, QMainWindow* _par
 
 QString saver::doSave()
 {
-    fstream fout(sFileName.toLocal8Bit().data(), ios::out | ios::binary);
-    if(!fout) {
-        return QString("Error: File is NULL");
+    const QFileInfo targetInfo(sFileName);
+    QDir targetDir = targetInfo.absoluteDir();
+    if(!targetDir.exists()) {
+        return QString("Error: Save folder does not exist: %1").arg(targetDir.absolutePath());
     }
 
-    QString temp = project->saveProject(fout);
+    QTemporaryFile temporary(targetDir.filePath(QString(".%1.XXXXXX.tmp").arg(targetInfo.fileName())));
+    temporary.setAutoRemove(true);
+    if(!temporary.open()) {
+        return QString("Error: Could not create a temporary save file: %1").arg(temporary.errorString());
+    }
+    const QString temporaryName = temporary.fileName();
+    temporary.close();
+
+    const QByteArray encodedTemporaryName = QFile::encodeName(temporaryName);
+    fstream fout(encodedTemporaryName.constData(), ios::out | ios::binary | ios::trunc);
+    if(!fout) {
+        return QString("Error: Could not open the temporary save file");
+    }
+
+    const QString result = project->saveProject(fout);
+
+    fout.flush();
+    if(!fout.good()) {
+        fout.close();
+        return QString("Error: Failed while writing the project; the previous save was kept");
+    }
 
     fout.close();
-    return temp;
+
+    // rename(2) replaces the destination atomically when both files are in
+    // the same directory. A failed or interrupted save therefore cannot
+    // truncate the user's existing project.
+    const QByteArray encodedTargetName = QFile::encodeName(targetInfo.absoluteFilePath());
+    if(::rename(encodedTemporaryName.constData(), encodedTargetName.constData()) != 0) {
+        return QString("Error: Could not replace the project file: %1")
+            .arg(QString::fromLocal8Bit(std::strerror(errno)));
+    }
+    temporary.setAutoRemove(false);
+    return result;
 }
 
 QString saver::doLoad()
 {
-    fstream fin(sFileName.toLocal8Bit().data(), ios::in | ios::binary);
+    const QByteArray encodedFileName = QFile::encodeName(sFileName);
+    fstream fin(encodedFileName.constData(), ios::in | ios::binary);
     if(!fin) {
-        return QString("Error: File is NULL");
+        return QString("Error: Could not open the project file");
     }
 
     QString temp = project->loadProject(fin);

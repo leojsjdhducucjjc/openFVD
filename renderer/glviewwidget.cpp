@@ -169,7 +169,7 @@ void glViewWidget::drawTrack(trackHandler *_track, bool toNormalMap)
 	trackMesh* mesh = _track->mMesh;
 	track* myTrack = _track->trackData;
 
-	glm::mat4 anchorBase = glm::translate(myTrack->startPos) * glm::rotate(TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+	glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), myTrack->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 
 	shader->bind();
 	shader->useUniform("projectionMatrix", &ProjectionMatrix);
@@ -256,7 +256,7 @@ void glViewWidget::drawSimpleSM(trackHandler *_track)
 	trackMesh* mesh = _track->mMesh;
 	track* myTrack = _track->trackData;
 
-	glm::mat4 anchorBase = glm::translate(myTrack->startPos) * glm::rotate(TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+	glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), myTrack->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 
 	if(shadowMode == 0) simpleShadowFb->bind();
 	else
@@ -333,7 +333,7 @@ void glViewWidget::drawShadowVolumes()
 
 
 	shadowVolumeShader->bind();
-	glm::mat4 anchorBase = glm::translate(glm::vec3(0, 0, 0));
+	glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0));
 
 	shadowVolumeShader->useUniform("projectionMatrix", &ProjectionMatrix);
 	shadowVolumeShader->useUniform("modelMatrix", &ModelMatrix);
@@ -354,7 +354,7 @@ void glViewWidget::drawShadowVolumes()
 
 			trackMesh* mesh = trackList[i]->mMesh;
 			track* myTrack = trackList[i]->trackData;
-			anchorBase = glm::translate(myTrack->startPos) * glm::rotate(TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+			anchorBase = glm::translate(glm::mat4(1.0f), myTrack->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 			shadowVolumeShader->useUniform("anchorBase", &anchorBase);
 			if(myTrack->drawHeartline != 2 && myTrack->lSections.size()!=0)
 			{
@@ -412,7 +412,7 @@ void glViewWidget::drawShadowVolumes()
 		{
 			trackMesh* mesh = trackList[i]->mMesh;
 			track* myTrack = trackList[i]->trackData;
-			anchorBase = glm::translate(myTrack->startPos) * glm::rotate(TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+			anchorBase = glm::translate(glm::mat4(1.0f), myTrack->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 			shadowVolumeShader->useUniform("anchorBase", &anchorBase);
 			glBindVertexArray(mesh->HeartObject[1]);
 			glDrawElements(GL_TRIANGLES, mesh->shadowIndices.size(), GL_UNSIGNED_INT, (GLvoid*)0);
@@ -435,7 +435,7 @@ void glViewWidget::drawShadowVolumes()
 
 	glDisable(GL_DEPTH_TEST);
 
-	anchorBase = glm::translate(glm::vec3(0, 0, 0));
+	anchorBase = glm::translate(glm::mat4(1.0f), glm::vec3(0, 0, 0));
 
 	shadowVolumeShader->useUniform("uFill", 1.f);
 	shadowVolumeShader->useUniform("projectionMatrix", &anchorBase);
@@ -673,7 +673,7 @@ void glViewWidget::paintGL()
 		}
 		else
 		{
-			glm::mat4 anchorBase = glm::translate(gloParent->curTrack()->startPos) * glm::rotate(TO_RAD(gloParent->curTrack()->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+			glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), gloParent->curTrack()->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(gloParent->curTrack()->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 			glm::vec3 vNormal = glm::vec3(anchorBase * glm::vec4(-povNode->vNorm, 0.f));
 			glm::vec3 vLookAt = glm::vec3(anchorBase * glm::vec4(povNode->vPos+povNode->vDirHeart(gloParent->curTrack()->fHeart), 1.f));
 			glm::vec3 vPosition = glm::vec3(anchorBase * glm::vec4(povNode->vPos, 1.f));
@@ -1399,7 +1399,7 @@ void glViewWidget::buildMatrices(float offset)
 
 		float h = (offset/fabs(offset)) *(hScreenSize - lensSep*2.f)/hScreenSize;
 		if(h != h) h = 0.f;
-		ProjectionMatrix = glm::translate(glm::vec3(h, 0.f, 0.f)) * ProjectionMatrix;
+		ProjectionMatrix = glm::translate(glm::mat4(1.0f), glm::vec3(h, 0.f, 0.f)) * ProjectionMatrix;
 	}
 	else
 	{
@@ -1407,7 +1407,7 @@ void glViewWidget::buildMatrices(float offset)
 	}
 	if(povMode)
 	{
-		anchorBase = glm::translate(gloParent->curTrack()->startPos) * glm::rotate(TO_RAD(gloParent->curTrack()->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+		anchorBase = glm::translate(glm::mat4(1.0f), gloParent->curTrack()->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(gloParent->curTrack()->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 		glm::vec3 pos = povNode->vRelPos(gloParent->curTrack()->povPos.y, gloParent->curTrack()->povPos.x);
 		glm::vec3 direction = povNode->vDirHeart(gloParent->curTrack()->fHeart);
 		glm::vec3 front = direction;
@@ -1479,7 +1479,7 @@ void glViewWidget::legacyDrawTrack(trackHandler *_track)
 	if(_track->trackData->drawHeartline == 2) return;
 
 	track* myTrack = _track->trackData;
-	glm::mat4 anchorBase = glm::translate(myTrack->startPos) * glm::rotate(TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+	glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), myTrack->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(myTrack->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 	glm::vec4 curPos;
 
 	float meshQuality;

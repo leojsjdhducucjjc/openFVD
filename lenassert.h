@@ -21,6 +21,7 @@
 
 #include <QErrorMessage>
 #include "assert.h"
+#include <cmath>
 
 #define F_PI (3.141592653589793f)
 #define F_PI_2 (1.570796326794896f)
@@ -37,6 +38,21 @@
 #define GLM_FORCE_RADIANS
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
+
+// GLM 1.0 removed the old two-vector angle overload used by FVD++. Keep the
+// math explicit and in radians, matching GLM_FORCE_RADIANS above.
+inline float fvdVectorAngle(const glm::vec3& a, const glm::vec3& b)
+{
+    const float aLengthSquared = glm::dot(a, a);
+    const float bLengthSquared = glm::dot(b, b);
+    if(aLengthSquared <= 1.0e-12f || bLengthSquared <= 1.0e-12f) return 0.0f;
+
+    const float cosine = glm::clamp(
+        glm::dot(a, b) / std::sqrt(aLengthSquared * bLengthSquared),
+        -1.0f,
+        1.0f);
+    return std::acos(cosine);
+}
 
 #ifdef QT_NO_DEBUG
     #define lenAssert(c) if(!(c)) qCritical("Assertion '%s' in %s line %d failed.", #c, __FILE__, __LINE__);

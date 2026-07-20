@@ -1,3 +1,34 @@
+# Apple Silicon macOS build
+
+The current source builds as a native `arm64` application for Apple Silicon
+Macs. This avoids Rosetta translating the old Intel-only app and its Qt/lib3ds
+libraries.
+
+Requirements:
+
+```bash
+brew install qt@5 glm
+```
+
+Clone with dependencies and build:
+
+```bash
+git clone --recurse-submodules https://github.com/leojsjdhducucjjc/openFVD.git
+cd openFVD
+./scripts/build-macos-arm64.sh
+```
+
+The packaged app is written to `dist/FVD-Apple-Silicon.zip`. The build targets
+macOS 12 or newer and is ad-hoc signed for local use. GitHub Actions also builds
+the same native archive on every push and pull request.
+
+Saving now writes a temporary file beside the project and atomically replaces
+the old file only after serialization succeeds. This keeps the previous save
+intact if a write fails or the app stops during saving.
+
+Preferences are stored in the user's macOS config directory instead of inside
+the signed app bundle, so they remain writable after moving FVD to Applications.
+
 ####################
 # open FVD++ v0.79 #
 ####################
@@ -177,4 +208,3 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program. If not, see <http://www.gnu.org/licenses/>.
-

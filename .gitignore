@@ -26,6 +26,8 @@
 *.exe
 *.out
 *.app
+build-arm64/
+dist/
 
 # OSX Crap
 *.DS_Store

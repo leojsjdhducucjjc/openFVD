@@ -165,6 +165,10 @@ void func::loadFunction(std::fstream& file)
         return;
     }
     int size = readInt(&file);
+    if(!file || size < 1 || size > 100000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     funcList[0]->loadSubFunc(file);
     for(int i = 1; i < size; ++i) {
         appendSubFunction(1, i-1);
@@ -179,6 +183,10 @@ void func::legacyLoadFunction(std::fstream& file)
         return;
     }
     int size = readInt(&file);
+    if(!file || size < 1 || size > 100000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     funcList[0]->legacyLoadSubFunc(file);
     for(int i = 1; i < size; ++i) {
         appendSubFunction(1, i-1);
@@ -203,6 +211,10 @@ void func::loadFunction(std::stringstream& file)
         return;
     }
     int size = readInt(&file);
+    if(!file || size < 1 || size > 100000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
     funcList[0]->loadSubFunc(file);
     for(int i = 1; i < size; ++i) {
         appendSubFunction(1, i-1);

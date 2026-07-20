@@ -182,8 +182,8 @@ void mnode::exportNode(QList<bezier_t*> &bezList, mnode *last, mnode*, mnode* an
         temp = glm::atan(this->vLatHeart(fHeart).y, -this->vNorm.y);
     } else {
         glm::vec3 rotateAxis = glm::cross(last->vDirHeart(fHeart), this->vDirHeart(fHeart));
-        glm::vec3 rotated = glm::vec3(glm::rotate(glm::angle(last->vDirHeart(fHeart), this->vDirHeart(fHeart)), rotateAxis)*glm::vec4(last->vLatHeart(fHeart), 0.f));
-        temp = glm::angle(rotated, this->vLatHeart(fHeart))*F_PI/180.f;
+        glm::vec3 rotated = glm::vec3(glm::rotate(glm::mat4(1.0f), fvdVectorAngle(last->vDirHeart(fHeart), this->vDirHeart(fHeart)), rotateAxis)*glm::vec4(last->vLatHeart(fHeart), 0.f));
+        temp = fvdVectorAngle(rotated, this->vLatHeart(fHeart));
         if(temp!=temp)
         {
             temp = 0.f;

@@ -133,8 +133,8 @@ int section::exportSection(fstream *file, mnode* anchor, float mPerNode, float f
 				temp = glm::atan(lNodes[i].vLatHeart(fHeart).y, -lNodes[i].vNorm.y);
 			} else {
 				glm::vec3 rotateAxis = glm::cross(lNodes[lasti].vDirHeart(fHeart), lNodes[i].vDirHeart(fHeart));
-				glm::vec3 rotated = glm::vec3(glm::rotate(glm::angle(lNodes[lasti].vDirHeart(fHeart), lNodes[i].vDirHeart(fHeart)), rotateAxis)*glm::vec4(lNodes[lasti].vLatHeart(fHeart), 0.f));
-				temp = glm::angle(rotated, lNodes[i].vLatHeart(fHeart))*F_PI/180.f;
+				glm::vec3 rotated = glm::vec3(glm::rotate(glm::mat4(1.0f), fvdVectorAngle(lNodes[lasti].vDirHeart(fHeart), lNodes[i].vDirHeart(fHeart)), rotateAxis)*glm::vec4(lNodes[lasti].vLatHeart(fHeart), 0.f));
+				temp = fvdVectorAngle(rotated, lNodes[i].vLatHeart(fHeart));
 				if(temp!=temp) {
                     temp = 0.f;
                 }

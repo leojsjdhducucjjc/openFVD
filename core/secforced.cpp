@@ -344,11 +344,7 @@ void secforced::saveSection(std::fstream& file)
     file << "FRC";
     writeBytes(&file, (const char*)&bSpeed, sizeof(bool));
 
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     writeBytes(&file, (const char*)&fVel, sizeof(float));
     writeBytes(&file, (const char*)&iTime, sizeof(int));
@@ -364,7 +360,7 @@ void secforced::loadSection(std::fstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);
@@ -381,7 +377,7 @@ void secforced::legacyLoadSection(std::fstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     bSpeed = true;
@@ -398,11 +394,7 @@ void secforced::saveSection(std::stringstream& file)
     file << "FRC";
     writeNulls(&file, 1);
 
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     writeBytes(&file, (const char*)&iTime, sizeof(int));
     writeBytes(&file, (const char*)&bOrientation, sizeof(bool));
@@ -417,7 +409,7 @@ void secforced::loadSection(std::stringstream& file)
     readNulls(&file, 1);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
     bSpeed = true;
     iTime = readInt(&file);

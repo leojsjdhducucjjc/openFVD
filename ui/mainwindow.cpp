@@ -35,6 +35,7 @@
 #include <QFileDialog>
 #include <QCloseEvent>
 #include "objectexporter.h"
+#include <QApplication>
 
 MainWindow* gloParent;
 glViewWidget* glView;
@@ -128,13 +129,17 @@ MainWindow::MainWindow(QWidget *parent) :
 
 
     QTimer *timer = new QTimer(this);
+    timer->setTimerType(Qt::PreciseTimer);
     connect(timer, SIGNAL(timeout()), glView, SLOT(updateGL()));
     connect(timer, SIGNAL(timeout()), this, SLOT(showCurInfoPanel()));
-	timer->start(10);
+	// 60 FPS avoids burning CPU rendering 100 frames per second on macOS.
+	timer->start(16);
 
     QTimer *autosave = new QTimer(this);
     connect(autosave, SIGNAL(timeout()), this, SLOT(doAutoSave()));
-    autosave->start(1000*60);
+    // Saving serializes the full project on the UI thread. A five-minute
+    // interval avoids the old once-per-minute pause while retaining backups.
+    autosave->start(1000*60*5);
 
     connect(this, SIGNAL(emitMessage(QString,int)), ui->statusBar, SLOT(showMessage(QString,int)));
 }
@@ -142,7 +147,6 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     delete ui;
-    exit(0);
 }
 
 void MainWindow::initProject()
@@ -181,6 +185,26 @@ void MainWindow::on_actionNew_triggered()
 
 void MainWindow::addProject(QString fileName) {
     ui->projectTab->importFromProject(fileName);
+}
+
+void MainWindow::openProjectFromFinder(const QString& fileName)
+{
+    if(fileName.isEmpty()) return;
+    if(currentFileName.isEmpty()) {
+        loadProject(fileName);
+        return;
+    }
+
+    QMessageBox mb(this);
+    mb.setWindowTitle(tr("Loading Project"));
+    mb.setText(tr("Another project is already loaded. Do you want to add the project in addition?"));
+    mb.setIcon(QMessageBox::Warning);
+    mb.setStandardButtons(QMessageBox::Cancel | QMessageBox::No | QMessageBox::Yes);
+    mb.setDefaultButton(QMessageBox::Yes);
+    const int result = mb.exec();
+
+    if(result == QMessageBox::No) loadProject(fileName);
+    else if(result == QMessageBox::Yes) addProject(fileName);
 }
 
 void MainWindow::loadProject(QString fileName)
@@ -263,13 +287,13 @@ void MainWindow::on_actionSave_triggered()
 
     if(currentFileName.isEmpty()) {
         on_actionSave_As_triggered();
+        return;
     }
-    saver* gott = new saver(currentFileName, ui->projectTab, this);
-    QString output = gott->doSave();
+    saver gott(currentFileName, ui->projectTab, this);
+    QString output = gott.doSave();
 
     ui->statusBar->showMessage(output, 5000);
 
-    delete gott;
     this->setWindowTitle(QString("FVD++ - " + currentFileName));
 }
 
@@ -278,9 +302,12 @@ void MainWindow::backupSave()
     if(currentFileName.isEmpty()) {
         return;
     }
-    saver* gott = new saver(QString().append(currentFileName).append(".bak"), ui->projectTab, this);
-    gott->doSave();
-    delete gott;
+    saver gott(QString().append(currentFileName).append(".bak"), ui->projectTab, this);
+    const QString output = gott.doSave();
+    if(output.startsWith("Error:")) {
+        showMessage(output);
+        return;
+    }
     this->setWindowTitle(QString("FVD++ - " + currentFileName));
     showMessage(QString("Executed autosave to ").append(currentFileName).append(".bak"));
 }
@@ -298,13 +325,13 @@ void MainWindow::on_actionSave_As_triggered()
     if(fileName.isEmpty()) {
         return;
     }
-    currentFileName = fileName;
-    saver* gott = new saver(currentFileName, ui->projectTab, this);
-    QString output = gott->doSave();
+    saver gott(fileName, ui->projectTab, this);
+    QString output = gott.doSave();
 
     showMessage(output);
 
-    delete gott;
+    if(output.startsWith("Error:")) return;
+    currentFileName = fileName;
     this->setWindowTitle(QString("FVD++ - " + currentFileName));
 }
 
@@ -492,7 +519,7 @@ void MainWindow::updateInfoPanel(mnode* lastnode)
     }
 
     float heart = curTrack()->fHeart;
-    glm::mat4 anchorBase = glm::translate(curTrack()->startPos) * glm::rotate(TO_RAD(curTrack()->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+    glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), curTrack()->startPos) * glm::rotate(glm::mat4(1.0f), TO_RAD(curTrack()->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
 
     glm::vec3 worldPos = glm::vec3(anchorBase * glm::vec4(lastnode->vPosHeart(heart), 1.f));
 

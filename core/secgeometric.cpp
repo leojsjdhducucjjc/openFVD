@@ -404,11 +404,7 @@ void secgeometric::saveSection(std::fstream& file)
     file << "GEO";
     writeBytes(&file, (const char*)&bSpeed, sizeof(bool));
 
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     writeBytes(&file, (const char*)&fVel, sizeof(float));
     writeBytes(&file, (const char*)&iTime, sizeof(int));
@@ -424,7 +420,7 @@ void secgeometric::loadSection(std::fstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);
@@ -442,7 +438,7 @@ void secgeometric::legacyLoadSection(std::fstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);
@@ -459,11 +455,7 @@ void secgeometric::saveSection(std::stringstream& file)
     file << "GEO";
     writeBytes(&file, (const char*)&bSpeed, sizeof(bool));
 
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     writeBytes(&file, (const char*)&fVel, sizeof(float));
     writeBytes(&file, (const char*)&iTime, sizeof(int));
@@ -479,7 +471,7 @@ void secgeometric::loadSection(std::stringstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);

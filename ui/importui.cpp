@@ -59,7 +59,8 @@ importUi::importUi(QWidget *parent, QString _fileName) :
         if(check == "TRC") {
             posList.append(fin.tellg());
             int namelength = readInt(&fin);
-            QString name = QString(readString(&fin, namelength).c_str());
+            QString name = readQString(&fin, namelength);
+            if(!fin) break;
             trackList.append(new trackHandler(name, id));
             ui->treeWidget->addTopLevelItem(trackList[id]->listItem);
             id++;

@@ -360,11 +360,7 @@ QString projectWidget::saveProject(std::fstream& file)
     file << "FVD";
     file << "v0.77";
 
-    int namelength = texPath.length();
-    std::string stdName = texPath.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << stdName;
+    writeQString(&file, texPath);
 
 
     for(int i = 0; i < this->trackList.size(); ++i) {
@@ -394,7 +390,11 @@ QString projectWidget::loadProject(std::fstream& file)
     this->cleanUp();
     if(legacy > -1) { // supported versions
         int namelength = readInt(&file);
-        texPath = QString(readString(&file, namelength).c_str());
+        texPath = readQString(&file, namelength);
+        if(!file) {
+            this->cleanUp();
+            return QString("Error: File Corrupted!");
+        }
 
         if(!glView->loadGroundTexture(texPath)) { // error while Loading
             texPath = QString(":/background.png");
@@ -408,11 +408,17 @@ QString projectWidget::loadProject(std::fstream& file)
             temp = readString(&file, 3);
             if(temp == "TRC") {
                 newEmptyTrack();
+                QString trackLoadResult;
                 if(legacy == 1) {
-                    trackList[i]->trackData->legacyLoadTrack(file, trackList[i]->trackWidgetItem);
+                    trackLoadResult = trackList[i]->trackData->legacyLoadTrack(file, trackList[i]->trackWidgetItem);
                     errType = 0;
                 } else {
-                    trackList[i]->trackData->loadTrack(file, trackList[i]->trackWidgetItem);
+                    trackLoadResult = trackList[i]->trackData->loadTrack(file, trackList[i]->trackWidgetItem);
+
+                    if(!file || trackLoadResult.startsWith("Error") || trackLoadResult.startsWith("Load not")) {
+                        errType = 11;
+                        break;
+                    }
 
                     trackWidget* _widget = trackList[i]->trackWidgetItem;
                     if(!_widget->smoothScreen) {
@@ -422,6 +428,10 @@ QString projectWidget::loadProject(std::fstream& file)
 
                     _widget->smoothScreen->updateUi();
                     _widget->smoothScreen->applyRollSmooth();
+                }
+                if(!file || trackLoadResult.startsWith("Error") || trackLoadResult.startsWith("Load not")) {
+                    errType = 11;
+                    break;
                 }
                 trackList[i]->listItem->setText(1, trackList[i]->trackData->name);
                 trackList[i]->mUndoHandler->clearActions();

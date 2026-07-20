@@ -138,11 +138,7 @@ void secstraight::saveSection(std::fstream& file)
     file << "STR";
     writeBytes(&file, (const char*)&bSpeed, sizeof(bool));
 
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     writeBytes(&file, (const char*)&fVel, sizeof(float));
     writeBytes(&file, (const char*)&fHLength, sizeof(float));
@@ -154,7 +150,7 @@ void secstraight::loadSection(std::fstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);
@@ -167,7 +163,7 @@ void secstraight::legacyLoadSection(std::fstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);
@@ -180,11 +176,7 @@ void secstraight::saveSection(std::stringstream& file)
     file << "STR";
     writeBytes(&file, (const char*)&bSpeed, sizeof(bool));
 
-    int namelength = sName.length();
-    std::string name = sName.toStdString();
-
-    writeBytes(&file, (const char*)&namelength, sizeof(int));
-    file << name;
+    writeQString(&file, sName);
 
     writeBytes(&file, (const char*)&fVel, sizeof(float));
     writeBytes(&file, (const char*)&fHLength, sizeof(float));
@@ -196,7 +188,7 @@ void secstraight::loadSection(std::stringstream& file)
     bSpeed = readBool(&file);
 
     int namelength = readInt(&file);
-    sName = QString(readString(&file, namelength).c_str());
+    sName = readQString(&file, namelength);
 
 
     fVel = readFloat(&file);

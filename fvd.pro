@@ -26,7 +26,7 @@
 # glm (tested with 0.9.5.1-1)
 # lib3ds
 
-CONFIG	+= qt
+CONFIG	+= qt c++11
 QT       += core gui widgets printsupport opengl
 
 #CONFIG += exceptions \
@@ -172,32 +172,46 @@ macx {
     ICON = fvd.icns
     QMAKE_INFO_PLIST = ./osx/resources/Info.plist
 
+    # Homebrew's Qt 5 bottle is native on Apple Silicon. Keep the target
+    # explicit so qmake can never silently produce a Rosetta-only build.
+    QMAKE_APPLE_DEVICE_ARCHS = arm64
+    QMAKE_MACOSX_DEPLOYMENT_TARGET = 12.0
+
     INCLUDEPATH += "./ui/"
     INCLUDEPATH += "./renderer/"
     INCLUDEPATH += "./core/"
-    INCLUDEPATH += "./glm/"
-    INCLUDEPATH += "/usr/local/include/"
+    INCLUDEPATH += "/opt/homebrew/include/"
+    INCLUDEPATH += "./third_party/lib3ds/src/"
 
-    LIBS += -framework Foundation -framework Cocoa
-    LIBS += -L /usr/local/lib/
-    LIBS += -l3ds
+    LIBS += -framework Foundation -framework Cocoa -framework OpenGL
 
-    QMAKE_CFLAGS_X86_64 += -mmacosx-version-min=10.6
-    QMAKE_CXXFLAGS_X86_64 = $$QMAKE_CFLAGS_X86_64
-    QMAKE_CXXFLAGS_RELEASE += -O2
+    QMAKE_CFLAGS += -arch arm64
+    QMAKE_CXXFLAGS += -arch arm64
+    QMAKE_LFLAGS += -arch arm64
+    QMAKE_CXXFLAGS_RELEASE += -O3
 
-    OBJECTIVE_SOURCES += \
-        osx/Document.mm \
-        osx/MainDelagate.mm \
-        osx/NSApplicationMain.mm
-
-    HEADERS += \
-        osx/Document.h \
-        osx/MainDelagate.h \
-        osx/NSApplicationMain.h
-
-    SOURCES +=  \
-        osx/Init.cpp
+    # Build lib3ds into FVD itself. The old app bundled an x86_64-only dylib,
+    # which forced the entire process through Rosetta.
+    SOURCES += \
+        third_party/lib3ds/src/lib3ds_atmosphere.c \
+        third_party/lib3ds/src/lib3ds_background.c \
+        third_party/lib3ds/src/lib3ds_camera.c \
+        third_party/lib3ds/src/lib3ds_chunk.c \
+        third_party/lib3ds/src/lib3ds_chunktable.c \
+        third_party/lib3ds/src/lib3ds_file.c \
+        third_party/lib3ds/src/lib3ds_io.c \
+        third_party/lib3ds/src/lib3ds_light.c \
+        third_party/lib3ds/src/lib3ds_material.c \
+        third_party/lib3ds/src/lib3ds_math.c \
+        third_party/lib3ds/src/lib3ds_matrix.c \
+        third_party/lib3ds/src/lib3ds_mesh.c \
+        third_party/lib3ds/src/lib3ds_node.c \
+        third_party/lib3ds/src/lib3ds_quat.c \
+        third_party/lib3ds/src/lib3ds_shadow.c \
+        third_party/lib3ds/src/lib3ds_track.c \
+        third_party/lib3ds/src/lib3ds_util.c \
+        third_party/lib3ds/src/lib3ds_vector.c \
+        third_party/lib3ds/src/lib3ds_viewport.c
 }
 
 RESOURCES += \

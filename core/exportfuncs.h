@@ -22,6 +22,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <QString>
 #include "mnode.h"
 
 void writeBytes(std::fstream *file, const char* data, size_t length );
@@ -29,6 +30,10 @@ void writeBytes(std::fstream *file, const char* data, size_t length );
 void writeNulls(std::fstream *file , size_t length );
 
 std::string readString(std::fstream *file, size_t length);
+
+void writeQString(std::fstream *file, const QString& value);
+
+QString readQString(std::fstream *file, int length);
 
 bool readNulls(std::fstream *file, size_t length);
 
@@ -48,6 +53,10 @@ void writeBytes(std::stringstream *file, const char* data, size_t length );
 void writeNulls(std::stringstream *file , size_t length );
 
 std::string readString(std::stringstream *file, size_t length);
+
+void writeQString(std::stringstream *file, const QString& value);
+
+QString readQString(std::stringstream *file, int length);
 
 bool readNulls(std::stringstream *file, size_t length);
 

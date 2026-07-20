@@ -25,6 +25,9 @@
 #include "glviewwidget.h"
 #include "mainwindow.h"
 #include "trackmesh.h"
+#include <QDir>
+#include <QFile>
+#include <QStandardPaths>
 
 extern MainWindow* gloParent;
 extern glViewWidget* glView;
@@ -42,7 +45,9 @@ optionsMenu::optionsMenu(QWidget *parent) :
     this->setMaximumSize(700, 700);
 #endif
 
-    optionsFile = common::getResource("options.cfg", true);
+    const QString configDirectory = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    QDir().mkpath(configDirectory);
+    optionsFile = QDir(configDirectory).filePath("options.cfg");
 
     if(!QFileInfo(QString(optionsFile)).exists() || !loadFromOptionsFile()) {
         measures = 0;
@@ -539,7 +544,12 @@ void optionsMenu::on_buttonBox_accepted()
 
 void optionsMenu::saveToOptionsFile()   // Ercan: Config file Erstellung hier
 {
-    std::fstream fout(optionsFile.toLocal8Bit().data(), std::ios::out);
+    const QByteArray encodedOptionsFile = QFile::encodeName(optionsFile);
+    std::fstream fout(encodedOptionsFile.constData(), std::ios::out | std::ios::trunc);
+    if(!fout) {
+        qWarning() << "Could not save options to" << optionsFile;
+        return;
+    }
     fout << "FVD Options File\ndelete to reset\n\n";
     fout << "Measures " << measures << "\n";
     fout << "DrawGrid " << drawGrid << "\n";
@@ -578,7 +588,9 @@ void optionsMenu::saveToOptionsFile()   // Ercan: Config file Erstellung hier
 
 bool optionsMenu::loadFromOptionsFile()   // Ercan: Config file Auslesen hier
 {
-    std::fstream fin(optionsFile.toLocal8Bit().data(), std::ios::in);
+    const QByteArray encodedOptionsFile = QFile::encodeName(optionsFile);
+    std::fstream fin(encodedOptionsFile.constData(), std::ios::in);
+    if(!fin) return false;
     bool ok;
     char input[100];
     for(int i = 0; i < 7; ++i)

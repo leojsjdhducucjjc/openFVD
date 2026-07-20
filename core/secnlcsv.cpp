@@ -156,6 +156,10 @@ void secnlcsv::loadSection(fstream &file)
     csvNodes.clear();
 
     int size = readInt(&file);
+    if(!file || size < 0 || size > 10000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
 
     for(int i=0; i < size; i++) {
         mnode node;
@@ -172,6 +176,10 @@ void secnlcsv::legacyLoadSection(fstream &file)
     csvNodes.clear();
 
     int size = readInt(&file);
+    if(!file || size < 0 || size > 10000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
 
     for(int i=0; i < size; i++) {
         mnode node;
@@ -211,6 +219,10 @@ void secnlcsv::loadSection(stringstream &file)
     csvNodes.clear();
 
     int size = readInt(&file);
+    if(!file || size < 0 || size > 10000000) {
+        file.setstate(std::ios::failbit);
+        return;
+    }
 
     for(int i=0; i < size; i++) {
         mnode node;

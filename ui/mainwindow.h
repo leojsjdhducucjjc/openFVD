@@ -102,6 +102,7 @@ public:
     void showAll();
     void addProject(QString fileName);
     void loadProject(QString fileName);
+    void openProjectFromFinder(const QString& fileName);
 
     void updateProjectWidget();
 

@@ -1206,7 +1206,7 @@ void trackWidget::on_pitchChangeBox_valueChanged(double arg1)
     if(fabs(forceAngle) < std::numeric_limits<float>::epsilon()) {
         forceVec = glm::vec3(0.f, 1.f, 0.f);
     } else {
-        forceVec = glm::vec3(0.f, 1.f, 0.f) + (float)((anchor->fVel*anchor->fVel) / (9.80665 * anchor->fVel/forceAngle * 0.18f/F_PI)) * glm::normalize(glm::vec3(glm::rotate(dirFromLast, -anchor->vDir)*glm::vec4(-anchor->vNorm, 0.f)));
+        forceVec = glm::vec3(0.f, 1.f, 0.f) + (float)((anchor->fVel*anchor->fVel) / (9.80665 * anchor->fVel/forceAngle * 0.18f/F_PI)) * glm::normalize(glm::vec3(glm::rotate(glm::mat4(1.0f), dirFromLast, -anchor->vDir)*glm::vec4(-anchor->vNorm, 0.f)));
     }
     anchor->forceNormal = - glm::dot(forceVec, glm::normalize(anchor->vNorm));
     anchor->forceLateral = - glm::dot(forceVec, glm::normalize(anchor->vLat));
@@ -1245,7 +1245,7 @@ void trackWidget::on_yawChangeBox_valueChanged(double arg1)
     if(fabs(forceAngle) < std::numeric_limits<float>::epsilon()) {
         forceVec = glm::vec3(0.f, 1.f, 0.f);
     } else {
-        forceVec = glm::vec3(0.f, 1.f, 0.f) + (float)((anchor->fVel*anchor->fVel) / (9.80665 * anchor->fVel/forceAngle * 0.18f/F_PI)) * glm::normalize(glm::vec3(glm::rotate(dirFromLast, -anchor->vDir)*glm::vec4(-anchor->vNorm, 0.f)));
+        forceVec = glm::vec3(0.f, 1.f, 0.f) + (float)((anchor->fVel*anchor->fVel) / (9.80665 * anchor->fVel/forceAngle * 0.18f/F_PI)) * glm::normalize(glm::vec3(glm::rotate(glm::mat4(1.0f), dirFromLast, -anchor->vDir)*glm::vec4(-anchor->vNorm, 0.f)));
     }
     anchor->forceNormal = - glm::dot(forceVec, glm::normalize(anchor->vNorm));
     anchor->forceLateral = - glm::dot(forceVec, glm::normalize(anchor->vLat));
