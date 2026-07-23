@@ -323,6 +323,7 @@ void graphWidget::curSectionChanged(sectionHandler *_section)
     case anchor:
     case bezier:
     case nolimitscsv:
+    case builder:
         return;
     case curved:
     case straight:

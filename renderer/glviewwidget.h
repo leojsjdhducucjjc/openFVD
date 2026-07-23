@@ -50,6 +50,7 @@
 class myShader;
 class myTexture;
 class myFramebuffer;
+class QLabel;
 
 typedef struct mesh_s
 {
@@ -63,6 +64,15 @@ class glViewWidget : public QGLWidget
 {
     Q_OBJECT
 public:
+    enum BuilderHandle {
+        NoBuilderHandle = 0,
+        BuilderLengthHandle,
+        BuilderDirectionHandle,
+        BuilderElevationHandle,
+        BuilderBankHandle,
+        BuilderHandleCount
+    };
+
     explicit glViewWidget(QWidget *parent = 0);
     ~glViewWidget();
     void paintGL();
@@ -70,6 +80,7 @@ public:
     bool loadGroundTexture(QString fileName);
 
     void setBackgroundColor(QColor _background);
+    bool builderHandlePosition(BuilderHandle handle, QPoint* position) const;
 
     int curTrackShader;
     bool povMode;
@@ -88,6 +99,7 @@ protected:
     void initializeGL();
     void resizeGL(int w, int h);
     void mousePressEvent(QMouseEvent *event);
+    void mouseReleaseEvent(QMouseEvent *event);
     void mouseMoveEvent(QMouseEvent *event);
     void keyPressEvent(QKeyEvent *event);
     void keyReleaseEvent(QKeyEvent *event);
@@ -95,6 +107,7 @@ protected:
 
 
 signals:
+    void builderHandleDragged(trackHandler* track, int handle, double amount);
 
 private:
 
@@ -104,10 +117,18 @@ private:
     void moveCamera();
     void buildMatrices(float offset);
     void updateLoD();
+    void rotateCamera(float horizontalDelta, float verticalDelta);
+    bool projectBuilderPoint(const glm::vec3& localPosition,
+                             const glm::mat4& anchorBase,
+                             QPoint* viewportPosition) const;
+    BuilderHandle builderHandleAt(const QPoint& viewportPosition) const;
+    void updateBuilderHandleLabels();
+    void hideBuilderHandleLabels();
 
     void drawFloor();
     void drawSky();
     void drawTrack(trackHandler* _track, bool toNormalMap = false);
+    void drawBuilderPreview(trackHandler* _track);
     void drawSimpleSM(trackHandler* _track);
     void drawShadowVolumes();
     void drawOcclusion();
@@ -116,8 +137,21 @@ private:
 
     void legacyDrawFloor();
     void legacyDrawTrack(trackHandler* _track);
+    void legacyDrawBuilderPreview(trackHandler* _track);
 
     QPoint mousePos;
+    trackHandler* builderHandleTrack;
+    BuilderHandle activeBuilderHandle;
+    QPoint builderHandlePositions[BuilderHandleCount];
+    bool builderHandleVisibility[BuilderHandleCount];
+    QLabel* builderHandleLabels[BuilderHandleCount];
+    QUuid cachedBuilderPreviewId;
+    quint64 cachedBuilderPreviewRevision;
+    int cachedBuilderRailVertexCount;
+    int cachedBuilderTieVertexStart;
+    int cachedBuilderTieVertexCount;
+    int cachedBuilderGizmoVertexStart;
+    float cachedBuilderHeartline;
 
     glm::vec3 freeFlyPos;
     glm::vec3 freeFlyDir;
@@ -159,9 +193,11 @@ private:
 
     mesh_t floorMesh;
     mesh_t skyMesh;
+    mesh_t ghostMesh;
     myShader* floorShader;
     myShader* skyShader;
     myShader* trackShader;
+    myShader* ghostShader;
     myShader* simpleSMShader;
     myShader* shadowVolumeShader;
     myShader* normalMapShader;

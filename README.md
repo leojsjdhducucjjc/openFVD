@@ -29,6 +29,28 @@ intact if a write fails or the app stops during saving.
 Preferences are stored in the user's macOS config directory instead of inside
 the signed app bundle, so they remain writable after moving FVD to Applications.
 
+## Regression tests
+
+The regression target exercises the production project loader and saver against
+the committed `v0.30` and `v0.77` fixtures, then saves and reloads a populated
+track through the same code path used by the application.
+
+```bash
+test_build="${TMPDIR:-/tmp}/openfvd-regression-tests"
+mkdir -p "$test_build"
+cd "$test_build"
+/opt/homebrew/bin/qmake /path/to/openFVD/tests/tests.pro CONFIG+=release
+make -j"$(sysctl -n hw.logicalcpu)"
+./fvd_regression_tests
+```
+
+Before merging coaster editor or track-builder changes, also run the checklist in
+`tests/MANUAL_COASTER_REGRESSION.md`.
+
+Development of the direct, Planet Coaster-style track editing workflow is
+tracked in `docs/TRACK_BUILDER_ROADMAP.md`. It is designed to coexist with the
+existing advanced force and geometry section editors.
+
 ####################
 # open FVD++ v0.79 #
 ####################

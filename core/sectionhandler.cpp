@@ -71,6 +71,10 @@ sectionHandler::sectionHandler(track* _track, enum secType _type, int _id)
     case nolimitscsv:
         listItem->setText(2, QString("NoLimits CSV"));
         break;
+    case builder:
+        listItem->setText(2, QString("Builder"));
+        listItem->setFlags(listItem->flags() | Qt::ItemIsEditable);
+        break;
     }
 }
 

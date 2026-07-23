@@ -21,6 +21,7 @@
 #include "mainwindow.h"
 #include <QtGui/QMouseEvent>
 #include <QGLContext>
+#include <QLabel>
 #include "optionsmenu.h"
 #include "graphwidget.h"
 #include "trackmesh.h"
@@ -47,6 +48,22 @@
 
 #define OCULUS_SCALE (0.68f)
 
+namespace {
+const float kCameraLookSensitivity = 0.10f;
+const float kBuilderLengthPerPixel = 0.08f;
+const float kBuilderDirectionPerPixel = 0.35f;
+const float kBuilderElevationPerPixel = 0.05f;
+const float kBuilderBankPerPixel = 0.5f;
+const int kBuilderHandleHitRadius = 16;
+
+QString signedBuilderNumber(float value)
+{
+	QString result = QString::number(value, 'f', 2);
+	if(!result.startsWith('-')) result.prepend('+');
+	return result;
+}
+}
+
 #ifdef USE_OVR
 using namespace OVR;
 #endif
@@ -66,8 +83,179 @@ glViewWidget::glViewWidget(QWidget *parent) : QGLWidget(parent) {
 	normalMapFb = NULL;
 	occlusionFb = NULL;
 	preDistortionFb = NULL;
+	ghostShader = NULL;
+	ghostMesh.object = 0;
+	ghostMesh.buffer = 0;
+	builderHandleTrack = NULL;
+	activeBuilderHandle = NoBuilderHandle;
+	cachedBuilderPreviewRevision = 0;
+	cachedBuilderRailVertexCount = 0;
+	cachedBuilderTieVertexStart = 0;
+	cachedBuilderTieVertexCount = 0;
+	cachedBuilderGizmoVertexStart = 0;
+	cachedBuilderHeartline = 0.f;
+	for(int i = 0; i < BuilderHandleCount; ++i) {
+		builderHandleVisibility[i] = false;
+		builderHandleLabels[i] = NULL;
+	}
+
+	const char* labelNames[BuilderHandleCount] = {
+		"", "builderLengthHandleLabel", "builderDirectionHandleLabel",
+		"builderElevationHandleLabel", "builderBankHandleLabel"
+	};
+	const char* labelColors[BuilderHandleCount] = {
+		"", "#ffd54f", "#ff9f43", "#66e08a", "#d889ff"
+	};
+	for(int i = BuilderLengthHandle; i < BuilderHandleCount; ++i) {
+		QLabel* label = new QLabel(this);
+		label->setObjectName(QString::fromLatin1(labelNames[i]));
+		label->setTextFormat(Qt::RichText);
+		label->setAttribute(Qt::WA_TransparentForMouseEvents);
+		label->setStyleSheet(QString::fromLatin1(
+			"QLabel { color: #f4f7fa; background-color: rgba(28, 32, 38, 232); "
+			"border: 1px solid %1; border-radius: 6px; padding: 3px 7px; "
+			"font-size: 11px; }").arg(QString::fromLatin1(labelColors[i])));
+		label->hide();
+		builderHandleLabels[i] = label;
+	}
 	floorOpacity = 0.8;
     initialized = 0;
+}
+
+bool glViewWidget::builderHandlePosition(BuilderHandle handle, QPoint* position) const
+{
+	if(!position
+	   || handle <= NoBuilderHandle
+	   || handle >= BuilderHandleCount
+	   || !builderHandleVisibility[handle]) {
+		return false;
+	}
+	*position = builderHandlePositions[handle];
+	return true;
+}
+
+bool glViewWidget::projectBuilderPoint(const glm::vec3& localPosition,
+	                                   const glm::mat4& anchorBase,
+	                                   QPoint* viewportPosition) const
+{
+	if(!viewportPosition) return false;
+	const glm::vec4 clip = ProjectionMatrix*ModelMatrix*anchorBase
+		* glm::vec4(localPosition, 1.f);
+	if(clip.w <= 0.f) return false;
+	const glm::vec3 ndc = glm::vec3(clip)/clip.w;
+	if(ndc.x < -1.f || ndc.x > 1.f
+	   || ndc.y < -1.f || ndc.y > 1.f
+	   || ndc.z < -1.f || ndc.z > 1.f) {
+		return false;
+	}
+	*viewportPosition = QPoint(static_cast<int>((ndc.x*0.5f+0.5f)*width()),
+	                           static_cast<int>((0.5f-ndc.y*0.5f)*height()));
+	return true;
+}
+
+glViewWidget::BuilderHandle glViewWidget::builderHandleAt(const QPoint& viewportPosition) const
+{
+	BuilderHandle nearest = NoBuilderHandle;
+	int nearestDistance = kBuilderHandleHitRadius*kBuilderHandleHitRadius;
+	for(int i = BuilderLengthHandle; i < BuilderHandleCount; ++i) {
+		if(!builderHandleVisibility[i]) continue;
+		const QPoint delta = viewportPosition-builderHandlePositions[i];
+		const int distance = delta.x()*delta.x()+delta.y()*delta.y();
+		if(distance <= nearestDistance) {
+			nearestDistance = distance;
+			nearest = static_cast<BuilderHandle>(i);
+		}
+	}
+	return nearest;
+}
+
+void glViewWidget::hideBuilderHandleLabels()
+{
+	for(int i = BuilderLengthHandle; i < BuilderHandleCount; ++i) {
+		if(builderHandleLabels[i] && !builderHandleLabels[i]->isHidden())
+			builderHandleLabels[i]->hide();
+	}
+}
+
+void glViewWidget::updateBuilderHandleLabels()
+{
+	if(!builderHandleTrack) {
+		hideBuilderHandleLabels();
+		return;
+	}
+
+	secbuilder* preview = builderHandleTrack->trackData->getBuilderPreview();
+	if(!preview) {
+		hideBuilderHandleLabels();
+		return;
+	}
+
+	const BuilderSegment& segment = preview->segment();
+	const QString values[BuilderHandleCount] = {
+		QString(),
+		QString::number(segment.horizontalLength(), 'f', 2)+tr(" m"),
+		signedBuilderNumber(segment.directionDegrees())+QChar(0x00b0),
+		signedBuilderNumber(segment.endOffset().y)+tr(" m"),
+		signedBuilderNumber(segment.endRollDegrees())+QChar(0x00b0)
+	};
+	const QString names[BuilderHandleCount] = {
+		QString(), tr("Length"), tr("Direction"), tr("Elevation"), tr("Bank")
+	};
+	const QString colors[BuilderHandleCount] = {
+		QString(), QStringLiteral("#ffd54f"), QStringLiteral("#ff9f43"),
+		QStringLiteral("#66e08a"), QStringLiteral("#d889ff")
+	};
+
+	QVector<QRect> occupied;
+	for(int i = BuilderLengthHandle; i < BuilderHandleCount; ++i) {
+		QLabel* label = builderHandleLabels[i];
+		if(!label || !builderHandleVisibility[i]) {
+			if(label) label->hide();
+			continue;
+		}
+
+		const QString labelText = QString(
+			"<span style='color:%1'>●</span> %2&nbsp;&nbsp;<b>%3</b>")
+			.arg(colors[i], names[i], values[i]);
+		if(label->text() != labelText) {
+			label->setText(labelText);
+			label->adjustSize();
+		}
+		const QSize labelSize = label->size();
+		QPoint topLeft = builderHandlePositions[i]+QPoint(13, -labelSize.height()/2);
+		if(topLeft.x()+labelSize.width() > width()-6)
+			topLeft.setX(builderHandlePositions[i].x()-labelSize.width()-13);
+		topLeft.setX(std::max(6, std::min(topLeft.x(), width()-labelSize.width()-6)));
+		topLeft.setY(std::max(6, std::min(topLeft.y(), height()-labelSize.height()-6)));
+
+		const QRect preferredRect(topLeft, labelSize);
+		QRect labelRect = preferredRect;
+		for(int attempt = 0; attempt < BuilderHandleCount*2; ++attempt) {
+			if(attempt > 0) {
+				const int row = (attempt+1)/2;
+				const int direction = attempt%2 ? 1 : -1;
+				labelRect.moveTop(preferredRect.top()
+				                  +direction*row*(labelSize.height()+5));
+				labelRect.moveTop(std::max(6, std::min(labelRect.top(),
+				                  height()-labelSize.height()-6)));
+			}
+			bool overlaps = false;
+			for(int existing = 0; existing < occupied.size(); ++existing) {
+				if(labelRect.adjusted(-3, -3, 3, 3).intersects(occupied[existing])) {
+					overlaps = true;
+					break;
+				}
+			}
+			if(!overlaps) break;
+		}
+
+		if(label->geometry() != labelRect) label->setGeometry(labelRect);
+		if(label->isHidden()) {
+			label->show();
+			label->raise();
+		}
+		occupied.append(labelRect);
+	}
 }
 
 glViewWidget::~glViewWidget()
@@ -77,6 +265,7 @@ glViewWidget::~glViewWidget()
 		delete skyShader;
 		delete floorShader;
 		delete trackShader;
+		delete ghostShader;
 		delete simpleSMShader;
 		delete shadowVolumeShader;
 
@@ -249,6 +438,132 @@ void glViewWidget::drawTrack(trackHandler *_track, bool toNormalMap)
 		normalMapFb->unbind();
 		glEnable(GL_BLEND);
 	}
+}
+
+void glViewWidget::drawBuilderPreview(trackHandler* _track)
+{
+	secbuilder* preview = _track->trackData->getBuilderPreview();
+	if(!preview || preview->lNodes.size() < 2 || !ghostShader) return;
+
+	mnode& endpointNode = preview->lNodes.last();
+	const glm::vec3 endpoint = endpointNode.vPosHeart(_track->trackData->fHeart);
+	const glm::vec3 directionHandle = endpoint
+		+3.f*endpointNode.vDirHeart(_track->trackData->fHeart);
+	const glm::vec3 elevationHandle = endpoint-3.f*glm::normalize(endpointNode.vNorm);
+	const glm::vec3 bankHandle = endpoint
+		+2.5f*endpointNode.vLatHeart(_track->trackData->fHeart);
+
+	const QUuid previewId = preview->segment().id();
+	const quint64 previewRevision = preview->revision();
+	const float heartline = _track->trackData->fHeart;
+	if(previewId != cachedBuilderPreviewId
+	   || previewRevision != cachedBuilderPreviewRevision
+	   || heartline != cachedBuilderHeartline) {
+		QVector<int> nodeIndices;
+		const int stride = std::max(1, preview->lNodes.size()/512);
+		nodeIndices.reserve(preview->lNodes.size()/stride+2);
+		for(int i = 0; i < preview->lNodes.size(); i += stride)
+			nodeIndices.append(i);
+		if(nodeIndices.isEmpty() || nodeIndices.last() != preview->lNodes.size()-1)
+			nodeIndices.append(preview->lNodes.size()-1);
+
+		const float railSpacing = 0.5f;
+		QVector<glm::vec3> leftRail;
+		QVector<glm::vec3> rightRail;
+		leftRail.reserve(nodeIndices.size());
+		rightRail.reserve(nodeIndices.size());
+		for(int i = 0; i < nodeIndices.size(); ++i) {
+			mnode& node = preview->lNodes[nodeIndices[i]];
+			const glm::vec3 center = node.vPosHeart(heartline);
+			const glm::vec3 lateral = node.vLatHeart(heartline);
+			leftRail.append(center-railSpacing*lateral);
+			rightRail.append(center+railSpacing*lateral);
+		}
+
+		QVector<glm::vec3> vertices;
+		const int tieStride = std::max(1, nodeIndices.size()/32);
+		vertices.reserve(2*nodeIndices.size()+2*(nodeIndices.size()/tieStride+2)+6);
+		vertices += leftRail;
+		vertices += rightRail;
+		cachedBuilderTieVertexStart = vertices.size();
+		for(int i = 0; i < nodeIndices.size(); i += tieStride) {
+			vertices.append(leftRail[i]);
+			vertices.append(rightRail[i]);
+		}
+		if((nodeIndices.size()-1)%tieStride) {
+			vertices.append(leftRail.last());
+			vertices.append(rightRail.last());
+		}
+		cachedBuilderTieVertexCount = vertices.size()-cachedBuilderTieVertexStart;
+		cachedBuilderGizmoVertexStart = vertices.size();
+		vertices.append(endpoint);
+		vertices.append(directionHandle);
+		vertices.append(endpoint);
+		vertices.append(elevationHandle);
+		vertices.append(endpoint);
+		vertices.append(bankHandle);
+
+		glBindBuffer(GL_ARRAY_BUFFER, ghostMesh.buffer);
+		glBufferData(GL_ARRAY_BUFFER,
+		             vertices.size()*sizeof(glm::vec3),
+		             vertices.constData(),
+		             GL_DYNAMIC_DRAW);
+		cachedBuilderRailVertexCount = nodeIndices.size();
+		cachedBuilderPreviewId = previewId;
+		cachedBuilderPreviewRevision = previewRevision;
+		cachedBuilderHeartline = heartline;
+	}
+
+	track* coaster = _track->trackData;
+	glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), coaster->startPos)
+		* glm::rotate(glm::mat4(1.0f), TO_RAD(coaster->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+	ghostShader->bind();
+	ghostShader->useUniform("projectionMatrix", &ProjectionMatrix);
+	ghostShader->useUniform("modelMatrix", &ModelMatrix);
+	ghostShader->useUniform("anchorBase", &anchorBase);
+	ghostShader->useUniform("color", 0.05f, 0.85f, 1.0f);
+	ghostShader->useUniform("opacity", 0.72f);
+
+	builderHandleTrack = _track;
+	builderHandleVisibility[BuilderLengthHandle] = projectBuilderPoint(
+		endpoint, anchorBase, &builderHandlePositions[BuilderLengthHandle]);
+	builderHandleVisibility[BuilderDirectionHandle] = projectBuilderPoint(
+		directionHandle, anchorBase, &builderHandlePositions[BuilderDirectionHandle]);
+	builderHandleVisibility[BuilderElevationHandle] = projectBuilderPoint(
+		elevationHandle, anchorBase, &builderHandlePositions[BuilderElevationHandle]);
+	builderHandleVisibility[BuilderBankHandle] = projectBuilderPoint(
+		bankHandle, anchorBase, &builderHandlePositions[BuilderBankHandle]);
+	// Preview geometry is an editor overlay. Reset every state it depends on
+	// so the shadow and sky passes cannot accidentally suppress it.
+	glDisable(GL_DEPTH_TEST);
+	glDisable(GL_STENCIL_TEST);
+	glEnable(GL_BLEND);
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+	glDepthMask(GL_FALSE);
+	glBindVertexArray(ghostMesh.object);
+	glLineWidth(1.f);
+	glDrawArrays(GL_LINE_STRIP, 0, cachedBuilderRailVertexCount);
+	glDrawArrays(GL_LINE_STRIP, cachedBuilderRailVertexCount, cachedBuilderRailVertexCount);
+	glDrawArrays(GL_LINES, cachedBuilderTieVertexStart, cachedBuilderTieVertexCount);
+
+	ghostShader->useUniform("opacity", 0.95f);
+	glPointSize(11.f);
+	ghostShader->useUniform("color", 1.0f, 0.75f, 0.12f);
+	glDrawArrays(GL_POINTS, cachedBuilderGizmoVertexStart, 1);
+	ghostShader->useUniform("color", 1.0f, 0.45f, 0.12f);
+	glDrawArrays(GL_LINES, cachedBuilderGizmoVertexStart, 2);
+	glDrawArrays(GL_POINTS, cachedBuilderGizmoVertexStart+1, 1);
+	ghostShader->useUniform("color", 0.25f, 0.9f, 0.4f);
+	glDrawArrays(GL_LINES, cachedBuilderGizmoVertexStart+2, 2);
+	glDrawArrays(GL_POINTS, cachedBuilderGizmoVertexStart+3, 1);
+	ghostShader->useUniform("color", 0.78f, 0.35f, 1.0f);
+	glDrawArrays(GL_LINES, cachedBuilderGizmoVertexStart+4, 2);
+	glDrawArrays(GL_POINTS, cachedBuilderGizmoVertexStart+5, 1);
+	glPointSize(1.f);
+	glLineWidth(1.f);
+	glBindVertexArray(0);
+	glDepthMask(GL_TRUE);
+	glEnable(GL_DEPTH_TEST);
 }
 
 void glViewWidget::drawSimpleSM(trackHandler *_track)
@@ -537,6 +852,9 @@ void glViewWidget::paintGL()
 	if(initialized != 2) return;
 	if(gloParent->mGraphWidget) gloParent->mGraphWidget->setBezPoints();
 	if(!paintMode) return;
+	for(int i = 0; i < BuilderHandleCount; ++i)
+		builderHandleVisibility[i] = false;
+	builderHandleTrack = NULL;
 
 	fov = gloParent->mOptions->fov;
 	shadowMode = gloParent->mOptions->shadowQuality;
@@ -602,6 +920,13 @@ void glViewWidget::paintGL()
 			}
 			drawFloor();
 			drawSky();
+			// Transparent editor overlays must be drawn after the opaque sky
+			// and floor passes or those passes overwrite the preview.
+			for(int i = 0; i < trackList.size(); ++i)
+			{
+				if(trackList[i]->trackData->drawTrack)
+					drawBuilderPreview(trackList[i]);
+			}
 		}
 		else // rift mode
 		{
@@ -655,6 +980,11 @@ void glViewWidget::paintGL()
 				drawFloor();
 				buildMatrices(0);
 				drawSky();
+				for(int i = 0; i < trackList.size(); ++i)
+				{
+					if(trackList[i]->trackData->drawTrack)
+						drawBuilderPreview(trackList[i]);
+				}
 				preDistortionFb->unbind();
 			}
 			glViewport(0, 0, viewPortWidth, viewPortHeight);
@@ -690,9 +1020,11 @@ void glViewWidget::paintGL()
 			if(trackList[i]->trackData->drawTrack)
 			{
 				legacyDrawTrack(trackList[i]);
+				legacyDrawBuilderPreview(trackList[i]);
 			}
 		}
 	}
+	updateBuilderHandleLabels();
 }
 
 QString glViewWidget::getGLVersionString()
@@ -886,54 +1218,124 @@ void glViewWidget::resizeGL(int w, int h)
 
 void glViewWidget::mousePressEvent(QMouseEvent *event)
 {
-	if(event->button() == Qt::RightButton)
-	{
-		moveMode = !moveMode;
+	if(event->button() == Qt::LeftButton && !moveMode) {
+		const BuilderHandle handle = builderHandleAt(event->pos());
+		if(handle != NoBuilderHandle && builderHandleTrack) {
+			activeBuilderHandle = handle;
+			mousePos = event->globalPos();
+			setCursor(handle == BuilderElevationHandle
+			              ? QCursor(Qt::SizeVerCursor)
+			              : QCursor(Qt::SizeHorCursor));
+			grabMouse();
+			event->accept();
+			return;
+		}
 	}
-	else
-	{
+
+	if(event->button() != Qt::RightButton || moveMode) {
+		event->ignore();
 		return;
 	}
-	if(moveMode)
-	{
-        setCursor(QCursor(Qt::BlankCursor));
-        mousePos = this->cursor().pos();
-		if(this->mapFromGlobal(mousePos).x() < 80)
-		{
-			mousePos.setX(this->mapToGlobal(QPoint(80, this->mapFromGlobal(mousePos).y())).x());
-		}
-		else if(this->mapFromGlobal(mousePos).x() > this->width()-80)
-		{
-			mousePos.setX(this->mapToGlobal(QPoint(this->width()-80, this->mapFromGlobal(mousePos).y())).x());
-		}
-		if(this->mapFromGlobal(mousePos).y() < 80)
-		{
-			mousePos.setY(this->mapToGlobal(QPoint(this->mapFromGlobal(mousePos).x(), 80)).y());
-		}
-		else if(this->mapFromGlobal(mousePos).y() > this->height()-80)
-		{
-			mousePos.setY(this->mapToGlobal(QPoint(this->mapFromGlobal(mousePos).x(), this->height()-80)).y());
-		}
-		this->cursor().setPos(mousePos);
 
-		this->setFocus();
-		this->grabKeyboard();
-		hasChanged = true;
-        //this->cursor().setPos(this->mapToGlobal(QPoint(this->width()/2.0, this->height()/2.0)));
-	}
-	else
-	{
+	// Roblox Studio-style camera control: looking is active only while the
+	// right button is held. Track consecutive event positions directly and
+	// avoid cursor warping, which is unreliable on macOS.
+	moveMode = true;
+	mousePos = event->globalPos();
+	setCursor(QCursor(Qt::ClosedHandCursor));
+	setFocus();
+	grabMouse();
+	grabKeyboard();
+	hasChanged = true;
+	event->accept();
+}
+
+void glViewWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+	if(event->button() == Qt::LeftButton && activeBuilderHandle != NoBuilderHandle) {
+		activeBuilderHandle = NoBuilderHandle;
 		setCursor(QCursor(Qt::ArrowCursor));
-		this->cursor().setPos(mousePos);
-		cameraMov = glm::vec4(0.f, 0.f, 0.f, 0.f);
-
-		this->releaseKeyboard();
+		releaseMouse();
+		event->accept();
+		return;
 	}
+
+	if(event->button() != Qt::RightButton || !moveMode) {
+		event->ignore();
+		return;
+	}
+
+	moveMode = false;
+	setCursor(QCursor(Qt::ArrowCursor));
+	cameraMov = glm::vec4(0.f, 0.f, 0.f, 0.f);
+	cameraJump = 0;
+	releaseMouse();
+	releaseKeyboard();
+	event->accept();
 }
 
 void glViewWidget::mouseMoveEvent(QMouseEvent *event)
 {
+	if(activeBuilderHandle != NoBuilderHandle) {
+		const QPoint currentPosition = event->globalPos();
+		const QPoint delta = currentPosition-mousePos;
+		mousePos = currentPosition;
+		double amount = 0.0;
+		switch(activeBuilderHandle) {
+		case BuilderLengthHandle:
+			amount = kBuilderLengthPerPixel*delta.x();
+			break;
+		case BuilderDirectionHandle:
+			amount = kBuilderDirectionPerPixel*delta.x();
+			break;
+		case BuilderElevationHandle:
+			amount = -kBuilderElevationPerPixel*delta.y();
+			break;
+		case BuilderBankHandle:
+			amount = kBuilderBankPerPixel*delta.x();
+			break;
+		default:
+			break;
+		}
+		if(amount != 0.0 && builderHandleTrack) {
+			emit builderHandleDragged(builderHandleTrack,
+			                          static_cast<int>(activeBuilderHandle),
+			                          amount);
+			hasChanged = true;
+			update();
+		}
+		event->accept();
+		return;
+	}
 
+	if(!moveMode) {
+		const BuilderHandle hoverHandle = builderHandleAt(event->pos());
+		setCursor(QCursor(hoverHandle == NoBuilderHandle
+		                      ? Qt::ArrowCursor
+		                      : Qt::OpenHandCursor));
+		return;
+	}
+
+	const QPoint currentPosition = event->globalPos();
+	const QPoint delta = currentPosition-mousePos;
+	if(delta.isNull()) return;
+	rotateCamera(-kCameraLookSensitivity*delta.x(),
+	             -kCameraLookSensitivity*delta.y());
+	mousePos = currentPosition;
+	hasChanged = true;
+	event->accept();
+}
+
+void glViewWidget::rotateCamera(float horizontalDelta, float verticalDelta)
+{
+	float sign = 1.f;
+	const glm::vec3 up = glm::cross(freeFlySide, freeFlyDir);
+	if(up.y < 0.f) sign = -1.f;
+	if(povMode) return;
+
+	freeFlyDir = glm::angleAxis(TO_RAD(horizontalDelta), sign*glm::vec3(0, 1, 0))*freeFlyDir;
+	freeFlySide = glm::angleAxis(TO_RAD(horizontalDelta), sign*glm::vec3(0, 1, 0))*freeFlySide;
+	freeFlyDir = glm::angleAxis(TO_RAD(verticalDelta), freeFlySide)*freeFlyDir;
 }
 
 void glViewWidget::keyPressEvent(QKeyEvent *event)
@@ -1133,6 +1535,15 @@ void glViewWidget::initFloorMesh()
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3*sizeof(float), 0);
 	glEnableVertexAttribArray(0);
 	glBindVertexArray(0);
+
+	glGenVertexArrays(1, &ghostMesh.object);
+	glGenBuffers(1, &ghostMesh.buffer);
+	glBindVertexArray(ghostMesh.object);
+	glBindBuffer(GL_ARRAY_BUFFER, ghostMesh.buffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec3), NULL, GL_DYNAMIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
+	glEnableVertexAttribArray(0);
+	glBindVertexArray(0);
 }
 
 void glViewWidget::initTextures()
@@ -1223,6 +1634,11 @@ void glViewWidget::initShaders()
 	trackShader->useAttribute(7, "aNormal");
 	trackShader->useAttribute(8, "aUv");
 	trackShader->linkProgram();
+
+	ghostShader = new myShader(":/shaders/ghost.vert", ":/shaders/ghost.frag");
+	ghostShader->useAttribute(0, "aPosition");
+	ghostShader->setOutput(0, "oFragColor");
+	ghostShader->linkProgram();
 
 	simpleShadowFb = new myFramebuffer(viewPortWidth, viewPortHeight, GL_RED, GL_RED);
 
@@ -1347,25 +1763,6 @@ void glViewWidget::moveCamera()
 		{
 			povMode = false;
 		}
-	}
-
-	if(moveMode) {
-		float rotateX = 0.25f * (mousePos.x() - cursor().pos().x());
-		float rotateY = 0.25f * (mousePos.y() - cursor().pos().y());
-		float sign = 1.f;
-		glm::vec3 up = glm::cross(freeFlySide, freeFlyDir);
-		if(up.y < 0)
-		{
-			sign = -1.f;
-		}
-		if(!povMode)
-		{
-			freeFlyDir = glm::angleAxis(TO_RAD(rotateX), sign*glm::vec3(0, 1, 0))*freeFlyDir;
-			freeFlySide = glm::angleAxis(TO_RAD(rotateX), sign*glm::vec3(0, 1, 0))*freeFlySide;
-			freeFlyDir = glm::angleAxis(TO_RAD(rotateY), freeFlySide)*freeFlyDir;
-			//freeFlyDir = glm::vec3(glm::rotate(, glm::cross(freeFlyDir, glm::vec3(0.f, 1.f, 0.f))) * glm::vec4(freeFlyDir, 0.f));
-		}
-		this->cursor().setPos(mousePos);
 	}
 
 	if(!povMode)
@@ -1741,4 +2138,29 @@ void glViewWidget::legacyDrawTrack(trackHandler *_track)
 			glEnd();
 		}
 	}
+}
+
+void glViewWidget::legacyDrawBuilderPreview(trackHandler* _track)
+{
+	secbuilder* preview = _track->trackData->getBuilderPreview();
+	if(!preview || preview->lNodes.size() < 2) return;
+
+	track* coaster = _track->trackData;
+	const glm::mat4 anchorBase = glm::translate(glm::mat4(1.0f), coaster->startPos)
+		* glm::rotate(glm::mat4(1.0f), TO_RAD(coaster->startYaw-90.f), glm::vec3(0.f, 1.f, 0.f));
+	const int stride = std::max(1, preview->lNodes.size()/512);
+
+	glColor4f(0.05f, 0.85f, 1.0f, 0.72f);
+	glLineWidth(3.f);
+	glBegin(GL_LINE_STRIP);
+	for(int i = 0; i < preview->lNodes.size(); i += stride) {
+		const glm::vec4 position = anchorBase
+			* glm::vec4(preview->lNodes[i].vPosHeart(coaster->fHeart), 1.f);
+		glVertex3f(position.x, position.y, position.z);
+	}
+	const glm::vec4 end = anchorBase
+		* glm::vec4(preview->lNodes.last().vPosHeart(coaster->fHeart), 1.f);
+	glVertex3f(end.x, end.y, end.z);
+	glEnd();
+	glLineWidth(1.f);
 }

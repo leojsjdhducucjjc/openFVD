@@ -41,7 +41,8 @@ enum secType
     forced,
     geometric,
     bezier,
-    nolimitscsv
+    nolimitscsv,
+    builder
 };
 
 class section

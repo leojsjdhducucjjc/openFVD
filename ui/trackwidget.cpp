@@ -23,18 +23,27 @@
 #include "undohandler.h"
 #include "mainwindow.h"
 #include "trackmesh.h"
+#include "glviewwidget.h"
+#include "buildereditorwidget.h"
+#include "secbuilder.h"
 #include <QMenu>
 #include <QKeyEvent>
 #include <QPushButton>
+#include <cmath>
 
 extern MainWindow* gloParent;
+extern glViewWidget* glView;
 
 trackWidget::trackWidget(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::trackWidget)
 {
+    inTrack = NULL;
+    builderEditor = NULL;
+    builderPreviousSelection = 0;
     phantomChanges = false;
     ui->setupUi(this);
+    initializeBuilderEditor();
     //track = new trackHandler("blubb", 255);
 
     ui->sectionListWidget->setItemDelegateForColumn(0, new NoEditDelegate(this));
@@ -64,9 +73,12 @@ trackWidget::trackWidget(QWidget *parent, trackHandler* _track) :
     QWidget(parent),
     ui(new Ui::trackWidget)
 {
+    builderEditor = NULL;
+    builderPreviousSelection = 0;
     phantomChanges = false;
     ui->setupUi(this);
     inTrack = _track;
+    initializeBuilderEditor();
 
     ui->sectionListWidget->setItemDelegateForColumn(0, new NoEditDelegate(this));
     ui->sectionListWidget->setItemDelegateForColumn(2, new NoEditDelegate(this));
@@ -99,10 +111,14 @@ trackWidget::trackWidget(QWidget *parent, trackHandler* _track) :
 
 trackWidget::~trackWidget()
 {
-    inTrack->trackWidgetItem = NULL;
-    inTrack->tabId = -1;
+    if(inTrack) {
+        inTrack->trackData->clearBuilderPreview();
+        inTrack->trackWidgetItem = NULL;
+        inTrack->tabId = -1;
+    }
     delete ui->sectionListWidget->itemDelegateForColumn(0);
     delete ui->sectionListWidget->itemDelegateForColumn(2);
+    delete builderEditor;
     delete ui;
 }
 
@@ -115,6 +131,8 @@ void trackWidget::on_addButton_released()
     menu->addAction("Curved Section", this, SLOT(addCurvedSec()));
     menu->addAction("Force Section", this, SLOT(addForceSec()));
     menu->addAction("Geometric Section", this, SLOT(addGeometricSec()));
+    menu->addSeparator();
+    menu->addAction("Builder Piece", this, SLOT(beginBuilderPiece()));
 
     menu->popup(this->cursor().pos());
 }
@@ -144,6 +162,174 @@ void trackWidget::addForceSec()
 void trackWidget::addGeometricSec()
 {
     addSection(geometric);
+}
+
+void trackWidget::initializeBuilderEditor()
+{
+    builderEditor = new BuilderEditorWidget(ui->scrollAreaWidgetContents);
+    ui->verticalLayout_3->addWidget(builderEditor);
+    builderEditor->hide();
+
+    connect(builderEditor,
+            SIGNAL(parametersChanged(double,double,double,double)),
+            this,
+            SLOT(updateBuilderPiece(double,double,double,double)));
+    connect(builderEditor, SIGNAL(commitRequested()), this, SLOT(commitBuilderPiece()));
+    connect(builderEditor, SIGNAL(cancelRequested()), this, SLOT(cancelBuilderPiece()));
+    if(glView) {
+        connect(glView,
+                SIGNAL(builderHandleDragged(trackHandler*,int,double)),
+                this,
+                SLOT(adjustBuilderHandle(trackHandler*,int,double)));
+    }
+}
+
+bool trackWidget::hasBuilderPreview() const
+{
+    return inTrack && inTrack->trackData->getBuilderPreview();
+}
+
+void trackWidget::beginBuilderPiece()
+{
+    if(!inTrack) return;
+    if(hasBuilderPreview()) {
+        builderEditor->show();
+        builderEditor->raise();
+        refreshBuilderViewport();
+        return;
+    }
+
+    const QList<QTreeWidgetItem*> selectedItems = ui->sectionListWidget->selectedItems();
+    builderPreviousSelection = selectedItems.isEmpty()
+        ? sectionList.size()-1
+        : getSection(selectedItems.first());
+
+    track* coaster = inTrack->trackData;
+    mnode* entry = coaster->lSections.isEmpty()
+        ? coaster->anchorNode
+        : &coaster->lSections.last()->lNodes.last();
+    secbuilder* preview = new secbuilder(coaster, entry);
+    preview->sName = tr("Builder Piece");
+    preview->updateSection();
+    coaster->setBuilderPreview(preview);
+
+    ui->sectionListWidget->clearSelection();
+    builderEditor->setPreviewMode(true);
+    builderEditor->setParameters(10.0, 0.0, 0.0, preview->segment().endRollDegrees());
+    builderEditor->setEditingStatus(tr("Piece settings"));
+    builderEditor->show();
+    ui->scrollAreaWidgetContents->adjustSize();
+    const int editorHeight = ui->scrollAreaWidgetContents->height()+5;
+    const int availableHeight = height()-ui->addButton->height()-100;
+    ui->scrollArea->setMaximumHeight(editorHeight);
+    ui->scrollArea->setMinimumHeight(availableHeight > editorHeight
+                                     ? editorHeight
+                                     : availableHeight);
+    ui->scrollArea->ensureWidgetVisible(builderEditor);
+    refreshBuilderViewport();
+    gloParent->updateInfoPanel();
+}
+
+void trackWidget::adjustBuilderHandle(trackHandler* track, int handle, double amount)
+{
+    if(track != inTrack || !hasBuilderPreview() || !builderEditor) return;
+    switch(static_cast<glViewWidget::BuilderHandle>(handle)) {
+    case glViewWidget::BuilderLengthHandle:
+        builderEditor->adjustLength(amount);
+        break;
+    case glViewWidget::BuilderDirectionHandle:
+        builderEditor->adjustDirection(amount);
+        break;
+    case glViewWidget::BuilderElevationHandle:
+        builderEditor->adjustElevation(amount);
+        break;
+    case glViewWidget::BuilderBankHandle:
+        builderEditor->adjustBank(amount);
+        break;
+    default:
+        break;
+    }
+}
+
+void trackWidget::updateBuilderPiece(double length,
+                                     double elevation,
+                                     double directionDegrees,
+                                     double bankDegrees)
+{
+    if(!hasBuilderPreview()) return;
+
+    secbuilder* preview = inTrack->trackData->getBuilderPreview();
+    preview->segment().configureFromEditor(static_cast<float>(length),
+                                           static_cast<float>(elevation),
+                                           static_cast<float>(directionDegrees),
+                                           static_cast<float>(bankDegrees));
+    preview->updateSection();
+    refreshBuilderViewport();
+    gloParent->updateInfoPanel();
+}
+
+void trackWidget::commitBuilderPiece()
+{
+    if(!hasBuilderPreview()) return;
+
+    secbuilder* preview = inTrack->trackData->getBuilderPreview();
+    const BuilderSegment committedSegment = preview->segment();
+    const bool committedSpeedMode = preview->bSpeed;
+    const float committedVelocity = preview->fVel;
+    const QString committedName = preview->sName;
+    inTrack->trackData->clearBuilderPreview();
+
+    addSection(builder);
+    secbuilder* committed = dynamic_cast<secbuilder*>(inTrack->trackData->activeSection);
+    if(!committed) return;
+
+    committed->segment() = committedSegment;
+    committed->bSpeed = committedSpeedMode;
+    committed->fVel = committedVelocity;
+    committed->sName = committedName;
+    sectionList.last()->listItem->setText(1, committedName);
+    inTrack->trackData->updateTrack(committed, 0);
+
+    // The legacy append action only remembers a section type. Store the BLD
+    // payload on this action so undo followed by redo recreates this exact
+    // piece instead of a default straight preview.
+    if(!inTrack->mUndoHandler->busy && !inTrack->mUndoHandler->lActions.isEmpty()) {
+        undoAction* action = inTrack->mUndoHandler->lActions.first();
+        if(action->type == appendSegment && action->toValue.toInt() == builder) {
+            delete action->info;
+            action->info = new std::stringstream();
+            committed->saveSection(*action->info);
+            action->info->seekg(0);
+        }
+    }
+
+    setupBuilderFrame();
+    inTrack->graphWidgetItem->redrawGraphs();
+    refreshBuilderViewport();
+    gloParent->updateInfoPanel();
+}
+
+void trackWidget::cancelBuilderPiece()
+{
+    if(!inTrack) return;
+    inTrack->trackData->clearBuilderPreview();
+    builderEditor->hide();
+
+    if(builderPreviousSelection >= 0 && builderPreviousSelection < sectionList.size()) {
+        ui->sectionListWidget->clearSelection();
+        sectionList[builderPreviousSelection]->listItem->setSelected(true);
+    } else {
+        on_sectionListWidget_itemSelectionChanged();
+    }
+    refreshBuilderViewport();
+    gloParent->updateInfoPanel();
+}
+
+void trackWidget::refreshBuilderViewport()
+{
+    if(!glView) return;
+    glView->hasChanged = true;
+    glView->update();
 }
 
 void trackWidget::addSection(secType _type)
@@ -263,6 +449,7 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
         ui->advancedFrame->hide();
         ui->sectionFrame->hide();
         ui->optionsFrame->hide();
+        builderEditor->hide();
     } else {
         QTreeWidgetItem* selected = ui->sectionListWidget->selectedItems().at(0);
         int index = getSection(selected);
@@ -294,6 +481,7 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
             ui->advancedFrame->hide();
             ui->sectionFrame->hide();
             ui->optionsFrame->hide();
+            builderEditor->hide();
             break;
         case straight:
             setupStraightFrame();
@@ -306,6 +494,7 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
             ui->advancedFrame->hide();
             ui->sectionFrame->show();
             ui->optionsFrame->show();
+            builderEditor->hide();
             break;
         case curved:
             setupCurvedFrame();
@@ -318,6 +507,7 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
             ui->advancedFrame->hide();
             ui->sectionFrame->show();
             ui->optionsFrame->show();
+            builderEditor->hide();
             break;
         case forced:
             setupAdvFrame();
@@ -330,6 +520,7 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
             ui->advancedFrame->show();
             ui->sectionFrame->show();
             ui->optionsFrame->show();
+            builderEditor->hide();
             break;
         case geometric:
             setupAdvFrame();
@@ -342,6 +533,7 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
             ui->advancedFrame->show();
             ui->sectionFrame->show();
             ui->optionsFrame->show();
+            builderEditor->hide();
             break;
         case bezier:
         case nolimitscsv:
@@ -352,6 +544,19 @@ void trackWidget::on_sectionListWidget_itemSelectionChanged()
             ui->advancedFrame->hide();
             ui->sectionFrame->hide();
             ui->optionsFrame->hide();
+            builderEditor->hide();
+            break;
+        case builder:
+            setupBuilderFrame();
+            ui->deleteButton->setEnabled(true);
+            ui->anchorFrame->hide();
+            ui->straightFrame->hide();
+            ui->curvedFrame->hide();
+            ui->advancedFrame->hide();
+            ui->sectionFrame->show();
+            ui->optionsFrame->hide();
+            builderEditor->setPreviewMode(false);
+            builderEditor->show();
             break;
         }
 
@@ -497,6 +702,20 @@ void trackWidget::setupAdvFrame()
     inTrack->mUndoHandler->oldSpeedState = selSection->sectionData->bSpeed;
     inTrack->mUndoHandler->oldSegmentSpeed = selSection->sectionData->fVel;
     phantomChanges = oldP;
+}
+
+void trackWidget::setupBuilderFrame()
+{
+    if(!selSection || selSection->type != builder) return;
+    const secbuilder* builderSection = dynamic_cast<const secbuilder*>(selSection->sectionData);
+    if(!builderSection) return;
+
+    const glm::vec3 offset = builderSection->segment().endOffset();
+    builderEditor->setParameters(builderSection->segment().horizontalLength(),
+                                 offset.y,
+                                 builderSection->segment().directionDegrees(),
+                                 builderSection->segment().endRollDegrees());
+    updateSectionFrame();
 }
 
 void trackWidget::updateSectionFrame()

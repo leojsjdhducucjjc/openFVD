@@ -19,6 +19,15 @@ jobs:
       - name: Install native build dependencies
         run: brew install qt@5 glm
 
+      - name: Build and run regression tests
+        run: |
+          test_build="$RUNNER_TEMP/openfvd-regression-tests"
+          mkdir -p "$test_build"
+          cd "$test_build"
+          "$(brew --prefix qt@5)/bin/qmake" "$GITHUB_WORKSPACE/tests/tests.pro" CONFIG+=release CONFIG+=sdk_no_version_check
+          make -j"$(sysctl -n hw.logicalcpu)"
+          ./fvd_regression_tests
+
       - name: Build and package arm64 app
         run: ./scripts/build-macos-arm64.sh
 

@@ -415,6 +415,12 @@ void undoAction::doUndo()
             inTrack->activeSection->loadSection(*info);
             inTrack->updateTrack(sectionNumber, 0);
         }
+        else if(temp == "BLD")
+        {
+            hTrack->trackWidgetItem->appendSection(builder);
+            inTrack->activeSection->loadSection(*info);
+            inTrack->updateTrack(sectionNumber, 0);
+        }
         delete info;
         hTrack->graphWidgetItem->redrawGraphs();
         info = new std::stringstream();
@@ -761,6 +767,19 @@ void undoAction::doRedo()
             break;
         case bezier:
             hTrack->trackWidgetItem->appendSection(bezier);
+            break;
+        case builder:
+            hTrack->trackWidgetItem->appendSection(builder);
+            if(info) {
+                info->clear();
+                info->seekg(0);
+                if(readString(info, 3) == "BLD") {
+                    inTrack->activeSection->loadSection(*info);
+                    inTrack->updateTrack(inTrack->activeSection, 0);
+                    hTrack->trackWidgetItem->setNames();
+                    hTrack->trackWidgetItem->setupBuilderFrame();
+                }
+            }
             break;
         }
         break;

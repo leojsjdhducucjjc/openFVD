@@ -34,11 +34,12 @@ extern MainWindow* gloParent;
 extern glViewWidget* glView;
 
 track::track()
+    : builderPreview(NULL)
 {
-
 }
 
 track::track(trackHandler* _parent, glm::vec3 startPos, float startYaw, float heartLine)
+    : builderPreview(NULL)
 {
     this->anchorNode = new mnode(glm::vec3(0.f, 0.f, 0.f), glm::vec3(0, 0, -1), 0., 10.f, 1., 0.);
     this->startPos = startPos;
@@ -65,6 +66,7 @@ track::track(trackHandler* _parent, glm::vec3 startPos, float startYaw, float he
 
 track::~track()
 {
+    clearBuilderPreview();
     while(lSections.size() != 0)
     {
         delete lSections.at(0);
@@ -76,6 +78,24 @@ track::~track()
         smoothList.removeFirst();
     }
     delete anchorNode;
+}
+
+secbuilder* track::getBuilderPreview() const
+{
+    return builderPreview;
+}
+
+void track::setBuilderPreview(secbuilder* preview)
+{
+    if(builderPreview == preview) return;
+    delete builderPreview;
+    builderPreview = preview;
+}
+
+void track::clearBuilderPreview()
+{
+    delete builderPreview;
+    builderPreview = NULL;
 }
 
 void track::removeSection(int index)
@@ -321,6 +341,9 @@ void track::newSection(enum secType type, int index)
         break;
     case 6:
         newSection = new secnlcsv(this, startNode);
+        break;
+    case builder:
+        newSection = new secbuilder(this, startNode);
         break;
     default:
         newSection = NULL;
@@ -1111,6 +1134,12 @@ QString track::loadTrack(fstream& file, trackWidget* _widget)
             activeSection->updateSection();
             //gloParent->addForceSec(activeSection);
         }
+        else if(temp == "BLD")
+        {
+            _widget->addSection(builder);
+            activeSection->loadSection(file);
+            activeSection->updateSection();
+        }
         else
         {
             return QString("Error while Loading: No Such Segment!");
@@ -1234,6 +1263,12 @@ QString track::legacyLoadTrack(fstream& file, trackWidget* _widget)
             activeSection->legacyLoadSection(file);
             activeSection->updateSection();
             //gloParent->addForceSec(activeSection);
+        }
+        else if(temp == "BLD")
+        {
+            _widget->addSection(builder);
+            activeSection->legacyLoadSection(file);
+            activeSection->updateSection();
         }
         else
         {

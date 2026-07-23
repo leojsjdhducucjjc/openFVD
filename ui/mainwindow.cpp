@@ -26,6 +26,7 @@
 #include "optionsmenu.h"
 #include "conversionpanel.h"
 #include "graphwidget.h"
+#include "secbuilder.h"
 #include <sstream>
 #include "trackwidget.h"
 #include <QTimer>
@@ -504,7 +505,16 @@ void MainWindow::updateInfoPanel()
     trackWidget* temp = (trackWidget*)ui->tabChooser->currentWidget();
     temp->updateSectionFrame();
     mnode* lastnode;
-    if(curTrack()->lSections.size() != 0 && curTrack()->activeSection != NULL) {
+
+    // Builder pieces live outside lSections until they are committed.  While a
+    // piece is being shaped, report the generated endpoint so the readout
+    // follows the visible preview instead of the previous committed section.
+    secbuilder* builderPreview = curTrack()->getBuilderPreview();
+    if(builderPreview != NULL && !builderPreview->lNodes.isEmpty()) {
+        lastnode = &builderPreview->lNodes.last();
+    } else if(curTrack()->lSections.size() != 0
+              && curTrack()->activeSection != NULL
+              && !curTrack()->activeSection->lNodes.isEmpty()) {
 		lastnode = &curTrack()->activeSection->lNodes[curTrack()->activeSection->lNodes.size()-1];
 	} else {
         lastnode = curTrack()->anchorNode;

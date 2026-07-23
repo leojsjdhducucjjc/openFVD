@@ -20,6 +20,7 @@
 */
 
 #include <QWidget>
+#include <QPointer>
 #include "section.h"
 #include "smoothui.h"
 
@@ -27,6 +28,7 @@
 class trackHandler;
 class sectionHandler;
 class QTreeWidgetItem;
+class BuilderEditorWidget;
 
 namespace Ui {
 class trackWidget;
@@ -50,6 +52,7 @@ public:
     void setupStraightFrame();
     void setupCurvedFrame();
     void setupAdvFrame();
+    void setupBuilderFrame();
     void updateSectionFrame();
     void updateOptionsFrame();
 
@@ -63,6 +66,7 @@ public:
     smoothUi* smoothScreen;
 
     void keyPressEvent(QKeyEvent* event);
+    bool hasBuilderPreview() const;
 
 signals:
     void done();
@@ -73,6 +77,7 @@ public slots:
     void addCurvedSec();
     void addForceSec();
     void addGeometricSec();
+    void beginBuilderPiece();
     void addSection(secType _type);
     void appendStraightSec();
     void appendCurvedSec();
@@ -137,6 +142,14 @@ public slots:
 
     void on_yawChangeBox_valueChanged(double arg1);
 
+    void updateBuilderPiece(double length,
+                            double elevation,
+                            double directionDegrees,
+                            double bankDegrees);
+    void commitBuilderPiece();
+    void cancelBuilderPiece();
+    void adjustBuilderHandle(trackHandler* track, int handle, double amount);
+
 private slots:
     void on_sectionListWidget_itemChanged(QTreeWidgetItem *item, int column);
 
@@ -144,9 +157,13 @@ private slots:
 
 
 private:
+    void initializeBuilderEditor();
+    void refreshBuilderViewport();
     void updateSectionIDs();
     Ui::trackWidget *ui;
     bool phantomChanges;
+    QPointer<BuilderEditorWidget> builderEditor;
+    int builderPreviousSelection;
 };
 
 #endif // TRACKWIDGET_H

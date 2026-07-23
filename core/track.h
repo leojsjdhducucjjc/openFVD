@@ -26,6 +26,7 @@
 #include "secgeometric.h"
 #include "secbezier.h"
 #include "secnlcsv.h"
+#include "secbuilder.h"
 #include "sectionhandler.h"
 #include <QList>
 #include <fstream>
@@ -80,6 +81,13 @@ public:
     int getNumPoints(section* until = NULL);
     int getSectionNumber(section* _section);
 
+    // Builder previews are deliberately kept outside lSections. They are
+    // transient editor state and therefore never enter save/export/undo data
+    // until the user commits the piece.
+    secbuilder* getBuilderPreview() const;
+    void setBuilderPreview(secbuilder* preview);
+    void clearBuilderPreview();
+
     void getSecNode(int index, int *node, int *section);
 
     bool hasChanged;
@@ -97,6 +105,7 @@ public:
     float fFriction;
     float fResistance;
     QList<section*> lSections;
+    secbuilder* builderPreview;
 
     optionsMenu* mOptions;
     QString name;
