@@ -112,9 +112,9 @@ glViewWidget::glViewWidget(QWidget *parent) : QGLWidget(parent) {
 		label->setTextFormat(Qt::RichText);
 		label->setAttribute(Qt::WA_TransparentForMouseEvents);
 		label->setStyleSheet(QString::fromLatin1(
-			"QLabel { color: #f4f7fa; background-color: rgba(28, 32, 38, 232); "
-			"border: 1px solid %1; border-radius: 6px; padding: 3px 7px; "
-			"font-size: 11px; }").arg(QString::fromLatin1(labelColors[i])));
+			"QLabel { color: #30343a; background-color: rgba(248, 248, 248, 235); "
+			"border: 1px solid %1; border-radius: 4px; padding: 2px 6px; "
+			"font-size: 10px; }").arg(QString::fromLatin1(labelColors[i])));
 		label->hide();
 		builderHandleLabels[i] = label;
 	}

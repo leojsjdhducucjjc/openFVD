@@ -176,6 +176,7 @@ void trackWidget::initializeBuilderEditor()
             SLOT(updateBuilderPiece(double,double,double,double)));
     connect(builderEditor, SIGNAL(commitRequested()), this, SLOT(commitBuilderPiece()));
     connect(builderEditor, SIGNAL(cancelRequested()), this, SLOT(cancelBuilderPiece()));
+    connect(builderEditor, SIGNAL(nextPieceRequested()), this, SLOT(beginBuilderPiece()));
     if(glView) {
         connect(glView,
                 SIGNAL(builderHandleDragged(trackHandler*,int,double)),

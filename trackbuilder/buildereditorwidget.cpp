@@ -6,6 +6,7 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QSizePolicy>
 #include <QVBoxLayout>
 
 namespace {
@@ -24,6 +25,7 @@ QDoubleSpinBox* createSpinBox(const char* objectName,
     result->setSuffix(suffix);
     result->setKeyboardTracking(false);
     result->setAlignment(Qt::AlignRight);
+    result->setMinimumHeight(22);
     return result;
 }
 
@@ -44,43 +46,23 @@ BuilderEditorWidget::BuilderEditorWidget(QWidget* parent)
     : QFrame(parent)
 {
     setObjectName("builderEditorFrame");
-    setFrameShape(QFrame::NoFrame);
-    setFixedWidth(250);
-    setStyleSheet(QString::fromLatin1(
-        "QFrame#builderEditorFrame { background-color: #1c2026; "
-        "border: 1px solid #39444f; border-radius: 8px; } "
-        "QFrame#builderEditorFrame QLabel { color: #edf2f6; } "
-        "QLabel#builderTitle { color: #ffffff; font-size: 13px; font-weight: 700; } "
-        "QLabel#builderModeBadge { color: #72e4f2; background-color: #19343b; "
-        "border: 1px solid #2a6973; border-radius: 5px; padding: 2px 6px; "
-        "font-size: 9px; font-weight: 700; } "
-        "QLabel#builderEditingStatus { color: #bceef5; background-color: #252c34; "
-        "border: 1px solid #35414c; border-radius: 5px; padding: 5px 7px; } "
-        "QLabel#builderDragHint { color: #aeb9c3; font-size: 10px; } "
-        "QLabel#builderSectionLabel { color: #7f8b96; font-size: 9px; font-weight: 700; } "
-        "QFrame#builderEditorFrame QDoubleSpinBox { color: #f5f8fa; "
-        "background-color: #12161b; border: 1px solid #414c57; border-radius: 5px; "
-        "min-height: 26px; padding: 0 6px; selection-background-color: #2d9daf; } "
-        "QFrame#builderEditorFrame QDoubleSpinBox:focus { border-color: #47d2ee; } "
-        "QFrame#builderEditorFrame QPushButton { min-height: 27px; border-radius: 5px; "
-        "padding: 0 10px; } "
-        "QPushButton#builderCancelButton { color: #d7dee4; background-color: #2a3139; "
-        "border: 1px solid #46515c; } "
-        "QPushButton#builderCancelButton:hover { background-color: #343d46; } "
-        "QPushButton#builderCommitButton { color: #071419; background-color: #47d2ee; "
-        "border: 1px solid #72e4f2; font-weight: 700; } "
-        "QPushButton#builderCommitButton:hover { background-color: #68def2; } "
-        "QPushButton#builderCommitButton:pressed { background-color: #2eb8d3; }"));
+    setFrameShape(QFrame::Panel);
+    setFrameShadow(QFrame::Sunken);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Minimum);
 
-    titleLabel = new QLabel(tr("New Track Piece"), this);
+    titleLabel = new QLabel(tr("Track Builder"), this);
     titleLabel->setObjectName("builderTitle");
     QFont titleFont = titleLabel->font();
     titleFont.setBold(true);
     titleLabel->setFont(titleFont);
 
-    modeLabel = new QLabel(tr("LIVE PREVIEW"), this);
+    modeLabel = new QLabel(tr("Preview"), this);
     modeLabel->setObjectName("builderModeBadge");
-    modeLabel->setAlignment(Qt::AlignCenter);
+    modeLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    QFont modeFont = modeLabel->font();
+    modeFont.setItalic(true);
+    modeFont.setPointSize(8);
+    modeLabel->setFont(modeFont);
 
     QHBoxLayout* header = new QHBoxLayout();
     header->setContentsMargins(0, 0, 0, 0);
@@ -93,6 +75,9 @@ BuilderEditorWidget::BuilderEditorWidget(QWidget* parent)
     QFont editingFont = editingLabel->font();
     editingFont.setBold(true);
     editingLabel->setFont(editingFont);
+    editingLabel->setFrameShape(QFrame::Panel);
+    editingLabel->setFrameShadow(QFrame::Sunken);
+    editingLabel->setMargin(4);
     setEditingStatus(tr("Piece settings"));
 
     hintLabel = new QLabel(
@@ -102,8 +87,11 @@ BuilderEditorWidget::BuilderEditorWidget(QWidget* parent)
     hintLabel->setTextFormat(Qt::RichText);
     hintLabel->setWordWrap(true);
 
-    QLabel* sectionLabel = new QLabel(tr("PIECE SHAPE"), this);
+    QLabel* sectionLabel = new QLabel(tr("Shape"), this);
     sectionLabel->setObjectName("builderSectionLabel");
+    QFont sectionFont = sectionLabel->font();
+    sectionFont.setBold(true);
+    sectionLabel->setFont(sectionFont);
 
     lengthBox = createSpinBox("builderLengthBox", 0.25, 2000.0, tr(" m"), this);
     elevationBox = createSpinBox("builderElevationBox", -1000.0, 1000.0, tr(" m"), this);
@@ -130,18 +118,21 @@ BuilderEditorWidget::BuilderEditorWidget(QWidget* parent)
     commitButton->setObjectName("builderCommitButton");
     cancelButton = new QPushButton(tr("Cancel"), this);
     cancelButton->setObjectName("builderCancelButton");
-    commitButton->setCursor(Qt::PointingHandCursor);
-    cancelButton->setCursor(Qt::PointingHandCursor);
+    nextButton = new QPushButton(tr("Build Next Piece"), this);
+    nextButton->setObjectName("builderNextButton");
 
     QHBoxLayout* actions = new QHBoxLayout();
+    actions->setContentsMargins(0, 0, 0, 0);
     actions->addWidget(cancelButton);
     actions->addWidget(commitButton);
+    actions->addWidget(nextButton);
     actions->setStretch(0, 1);
     actions->setStretch(1, 2);
+    actions->setStretch(2, 2);
 
     QVBoxLayout* content = new QVBoxLayout(this);
-    content->setContentsMargins(10, 9, 10, 10);
-    content->setSpacing(8);
+    content->setContentsMargins(4, 4, 4, 4);
+    content->setSpacing(4);
     content->addLayout(header);
     content->addWidget(editingLabel);
     content->addWidget(hintLabel);
@@ -155,8 +146,10 @@ BuilderEditorWidget::BuilderEditorWidget(QWidget* parent)
     connect(bankBox, SIGNAL(valueChanged(double)), this, SLOT(emitParameters()));
     connect(commitButton, SIGNAL(released()), this, SIGNAL(commitRequested()));
     connect(cancelButton, SIGNAL(released()), this, SIGNAL(cancelRequested()));
+    connect(nextButton, SIGNAL(released()), this, SIGNAL(nextPieceRequested()));
 
     setParameters(10.0, 0.0, 0.0, 0.0);
+    setPreviewMode(true);
 }
 
 void BuilderEditorWidget::adjustLength(double amount)
@@ -205,17 +198,21 @@ void BuilderEditorWidget::setParameters(double length,
 
 void BuilderEditorWidget::setPreviewMode(bool preview)
 {
-    titleLabel->setText(preview ? tr("New Track Piece") : tr("Track Piece"));
-    modeLabel->setText(preview ? tr("LIVE PREVIEW") : tr("SELECTED"));
+    titleLabel->setText(tr("Track Builder"));
+    modeLabel->setText(preview ? tr("Preview") : tr("Selected"));
     hintLabel->setText(preview
         ? tr("Drag the labeled handles on the track, or enter exact values below.")
-        : tr("This piece's exact shape values are shown below."));
+        : tr("This piece's exact shape values are shown below. Continue building from its endpoint."));
+    if(!preview) editingLabel->setText(tr("Piece information"));
     lengthBox->setEnabled(preview);
     elevationBox->setEnabled(preview);
     directionBox->setEnabled(preview);
     bankBox->setEnabled(preview);
     commitButton->setVisible(preview);
     cancelButton->setVisible(preview);
+    nextButton->setVisible(!preview);
+    commitButton->setDefault(preview);
+    nextButton->setDefault(!preview);
 }
 
 void BuilderEditorWidget::emitParameters()

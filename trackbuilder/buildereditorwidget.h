@@ -35,6 +35,7 @@ signals:
                            double bankDegrees);
     void commitRequested();
     void cancelRequested();
+    void nextPieceRequested();
 
 private slots:
     void emitParameters();
@@ -50,6 +51,7 @@ private:
     QDoubleSpinBox* bankBox;
     QPushButton* commitButton;
     QPushButton* cancelButton;
+    QPushButton* nextButton;
 };
 
 #endif // BUILDEREDITORWIDGET_H

@@ -491,6 +491,7 @@ void LegacyProjectRegression::builderUiPreviewCommitCancelAndRedo()
     QDoubleSpinBox* bankBox = window->findChild<QDoubleSpinBox*>("builderBankBox");
     QPushButton* commitButton = window->findChild<QPushButton*>("builderCommitButton");
     QPushButton* cancelButton = window->findChild<QPushButton*>("builderCancelButton");
+    QPushButton* nextButton = window->findChild<QPushButton*>("builderNextButton");
     QLabel* editingLabel = window->findChild<QLabel*>("builderEditingStatus");
     QLabel* modeLabel = window->findChild<QLabel*>("builderModeBadge");
     QLabel* yawLabel = window->findChild<QLabel*>("infoDirLabel");
@@ -508,6 +509,7 @@ void LegacyProjectRegression::builderUiPreviewCommitCancelAndRedo()
     QVERIFY(bankBox != NULL);
     QVERIFY(commitButton != NULL);
     QVERIFY(cancelButton != NULL);
+    QVERIFY(nextButton != NULL);
     QVERIFY(editingLabel != NULL);
     QVERIFY(modeLabel != NULL);
     QVERIFY(yawLabel != NULL);
@@ -527,7 +529,8 @@ void LegacyProjectRegression::builderUiPreviewCommitCancelAndRedo()
     QCOMPARE(coaster->lSections.size(), 0);
     QVERIFY(commitButton->isVisible());
     QVERIFY(cancelButton->isVisible());
-    QCOMPARE(modeLabel->text(), QString("LIVE PREVIEW"));
+    QCOMPARE(modeLabel->text(), QString("Preview"));
+    QVERIFY(!nextButton->isVisible());
     QWidget* builderFrame = window->findChild<QWidget*>("builderEditorFrame");
     QVERIFY(builderFrame != NULL);
     QVERIFY(editor->isAncestorOf(builderFrame));
@@ -638,7 +641,8 @@ void LegacyProjectRegression::builderUiPreviewCommitCancelAndRedo()
 
     QVERIFY(!editor->hasBuilderPreview());
     QVERIFY(builderFrame->isVisible());
-    QCOMPARE(modeLabel->text(), QString("SELECTED"));
+    QCOMPARE(modeLabel->text(), QString("Selected"));
+    QVERIFY(nextButton->isVisible());
     QVERIFY(!lengthBox->isEnabled());
     QVERIFY(!elevationBox->isEnabled());
     QVERIFY(!directionBox->isEnabled());
@@ -651,6 +655,20 @@ void LegacyProjectRegression::builderUiPreviewCommitCancelAndRedo()
     QVERIFY(nearlyEqual(committed->segment().endRollDegrees(), 42.f));
     QCOMPARE(editor->sectionList.size(), 2);
     QCOMPARE(editor->sectionList.last()->type, builder);
+
+    // A committed Builder piece can extend directly into another live piece
+    // without reopening Add -> Builder Piece.
+    QTest::mouseClick(nextButton, Qt::LeftButton);
+    QVERIFY(editor->hasBuilderPreview());
+    QCOMPARE(coaster->lSections.size(), 1);
+    QCOMPARE(modeLabel->text(), QString("Preview"));
+    QVERIFY(commitButton->isVisible());
+    QVERIFY(cancelButton->isVisible());
+    QVERIFY(!nextButton->isVisible());
+    editor->cancelBuilderPiece();
+    QVERIFY(!editor->hasBuilderPreview());
+    QCOMPARE(coaster->lSections.size(), 1);
+    QVERIFY(nextButton->isVisible());
 
     handler->mUndoHandler->doUndo();
     QCOMPARE(coaster->lSections.size(), 0);
