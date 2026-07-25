@@ -1,4 +1,31 @@
-# Apple Silicon macOS build
+# FVD++
+
+## Downloads
+
+[![Download for Windows](https://img.shields.io/badge/Download-Windows%20x64-0078D4?logo=windows)](https://github.com/leojsjdhducucjjc/openFVD/releases/latest/download/FVD-Windows-x64.zip)
+[![Download for Apple Silicon](https://img.shields.io/badge/Download-macOS%20Apple%20Silicon-111111?logo=apple)](https://github.com/leojsjdhducucjjc/openFVD/releases/latest/download/FVD-Apple-Silicon.zip)
+
+Both downloads are self-contained and include the Qt and graphics runtime
+libraries needed to launch FVD++. The Windows executable is not Authenticode
+signed and the macOS app is not Apple-notarized, so SmartScreen or Gatekeeper
+may ask you to confirm that you trust the app.
+Downloads and release notes are also available on the
+[latest GitHub release](https://github.com/leojsjdhducucjjc/openFVD/releases/latest).
+
+GitHub Actions builds both packages on every push and pull request. Development
+artifacts are available from the successful
+[Build Downloads workflow](https://github.com/leojsjdhducucjjc/openFVD/actions/workflows/downloads.yml)
+for 30 days.
+
+Pushing a version tag such as `v0.80` publishes both ZIP files, generated release
+notes, and SHA-256 checksums to GitHub Releases:
+
+```bash
+git tag v0.80
+git push origin v0.80
+```
+
+## Build for Apple Silicon macOS
 
 The current source builds as a native `arm64` application for Apple Silicon
 Macs. This avoids Rosetta translating the old Intel-only app and its Qt/lib3ds
@@ -19,8 +46,23 @@ cd openFVD
 ```
 
 The packaged app is written to `dist/FVD-Apple-Silicon.zip`. The build targets
-macOS 12 or newer and is ad-hoc signed for local use. GitHub Actions also builds
-the same native archive on every push and pull request.
+macOS 12 or newer and is ad-hoc signed for local use.
+
+## Build for Windows
+
+The automated Windows build targets 64-bit Windows with Qt 5.15.2 and MSVC.
+It installs GLM and GLEW through vcpkg, builds vendored lib3ds directly into the
+application, and runs `windeployqt` before creating
+`dist/FVD-Windows-x64.zip`.
+
+From a Visual Studio x64 developer PowerShell with Qt's `bin` directory on
+`PATH`, install the dependencies and run:
+
+```powershell
+vcpkg install glm:x64-windows glew:x64-windows
+$env:OPENFVD_DEPS_ROOT = "$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows"
+.\scripts\build-windows-x64.ps1
+```
 
 Saving now writes a temporary file beside the project and atomically replaces
 the old file only after serialization succeeds. This keeps the previous save

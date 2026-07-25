@@ -40,22 +40,22 @@ INCLUDEPATH += $$OPENFVD_ROOT/trackbuilder
 SOURCES += $$OPENFVD_ROOT/main.cpp
 include($$OPENFVD_ROOT/fvd_sources.pri)
 
-!unix:!macx {
+win32 {
     INCLUDEPATH += "./ui/"
     INCLUDEPATH += "./renderer/"
     INCLUDEPATH += "./core/"
 
-	INCLUDEPATH += "C:\Development\Libraries\glew-1.12.0\include" # path-to-glew/include
-	INCLUDEPATH += "C:\Development\Libraries\glm" #path-to-glm"
-	INCLUDEPATH += "C:\Development\Libraries\lib3ds-20080909\src" #path-to-lib3ds
+    OPENFVD_DEPS_ROOT = $$clean_path($$(OPENFVD_DEPS_ROOT))
+    isEmpty(OPENFVD_DEPS_ROOT) {
+        error("Set OPENFVD_DEPS_ROOT to a dependency prefix containing include/, lib/, and bin/ (the Windows build script configures this automatically).")
+    }
 
     RC_FILE = winicon.rc
 
-    LIBS += -lOpenGL32
-    LIBS += -lGlU32
-	LIBS += "C:\Development\Libraries\glew-1.12.0\lib\Release\x64\glew32.lib" #path-to-glew\lib\Release\Win32\glew32.lib
-	LIBS += "C:\Development\Libraries\glew-1.12.0\bin\Release\x64\glew32.dll" #path-to-glew\bin\Release\Win32\glew32.dll
-	LIBS += "C:\Development\Libraries\lib3ds-20080909\build-lib3ds-64Bit-Release\release\lib3ds.dll" #path-to-glew\bin\Release\Win32\glew32.dll
+    INCLUDEPATH += $$OPENFVD_DEPS_ROOT/include
+    LIBS += -L$$OPENFVD_DEPS_ROOT/lib -lglew32 -lOpenGL32 -lGlU32
+
+    include($$OPENFVD_ROOT/third_party/lib3ds.pri)
 }
 
 unix:!macx {
@@ -85,7 +85,6 @@ macx {
     INCLUDEPATH += "./renderer/"
     INCLUDEPATH += "./core/"
     INCLUDEPATH += "/opt/homebrew/include/"
-    INCLUDEPATH += "./third_party/lib3ds/src/"
 
     LIBS += -framework Foundation -framework Cocoa -framework OpenGL
 
@@ -94,28 +93,9 @@ macx {
     QMAKE_LFLAGS += -arch arm64
     QMAKE_CXXFLAGS_RELEASE += -O3
 
-    # Build lib3ds into FVD itself. The old app bundled an x86_64-only dylib,
-    # which forced the entire process through Rosetta.
-    SOURCES += \
-        third_party/lib3ds/src/lib3ds_atmosphere.c \
-        third_party/lib3ds/src/lib3ds_background.c \
-        third_party/lib3ds/src/lib3ds_camera.c \
-        third_party/lib3ds/src/lib3ds_chunk.c \
-        third_party/lib3ds/src/lib3ds_chunktable.c \
-        third_party/lib3ds/src/lib3ds_file.c \
-        third_party/lib3ds/src/lib3ds_io.c \
-        third_party/lib3ds/src/lib3ds_light.c \
-        third_party/lib3ds/src/lib3ds_material.c \
-        third_party/lib3ds/src/lib3ds_math.c \
-        third_party/lib3ds/src/lib3ds_matrix.c \
-        third_party/lib3ds/src/lib3ds_mesh.c \
-        third_party/lib3ds/src/lib3ds_node.c \
-        third_party/lib3ds/src/lib3ds_quat.c \
-        third_party/lib3ds/src/lib3ds_shadow.c \
-        third_party/lib3ds/src/lib3ds_track.c \
-        third_party/lib3ds/src/lib3ds_util.c \
-        third_party/lib3ds/src/lib3ds_vector.c \
-        third_party/lib3ds/src/lib3ds_viewport.c
+    # The old app bundled an x86_64-only dylib, which forced the entire
+    # process through Rosetta. Compile the vendored source into the app.
+    include($$OPENFVD_ROOT/third_party/lib3ds.pri)
 }
 
 RESOURCES += \
