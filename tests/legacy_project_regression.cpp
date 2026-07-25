@@ -110,6 +110,7 @@ private slots:
     void builderSectionFollowsAdvancedSections();
     void builderSectionPersistenceRoundTrip();
     void builderUiPreviewCommitCancelAndRedo();
+    void builderDeletionRestoresPreviousEditor();
     void cameraUsesHoldToDrag();
     void builderSectionRejectsInvalidPayload_data();
     void builderSectionRejectsInvalidPayload();
@@ -679,6 +680,46 @@ void LegacyProjectRegression::builderUiPreviewCommitCancelAndRedo()
     QCOMPARE(redone->segment().id(), expectedId);
     QVERIFY(nearlyEqual(redone->segment().endOffset(), expectedOffset));
     QVERIFY(nearlyEqual(redone->segment().endRollDegrees(), 42.f));
+    glView->doneCurrent();
+}
+
+void LegacyProjectRegression::builderDeletionRestoresPreviousEditor()
+{
+    glView->makeCurrent();
+    window->project->init();
+    trackHandler* handler = window->project->trackList.first();
+    trackWidget* editor = handler->trackWidgetItem;
+    track* coaster = handler->trackData;
+    window->openTab(handler);
+    QApplication::processEvents();
+
+    editor->addStraightSec();
+    QVERIFY(editor->selSection != NULL);
+    QCOMPARE(editor->selSection->type, straight);
+
+    editor->beginBuilderPiece();
+    editor->commitBuilderPiece();
+    QCOMPARE(coaster->lSections.size(), 2);
+    QVERIFY(editor->selSection != NULL);
+    QCOMPARE(editor->selSection->type, builder);
+
+    QWidget* builderFrame = window->findChild<QWidget*>("builderEditorFrame");
+    QWidget* straightFrame = window->findChild<QWidget*>("straightFrame");
+    QVERIFY(builderFrame != NULL);
+    QVERIFY(straightFrame != NULL);
+    QVERIFY(builderFrame->isVisible());
+
+    editor->on_deleteButton_released();
+
+    QCOMPARE(coaster->lSections.size(), 1);
+    QCOMPARE(editor->sectionList.size(), 2);
+    QVERIFY(editor->selSection != NULL);
+    QCOMPARE(editor->selSection, editor->sectionList[1]);
+    QCOMPARE(editor->selSection->type, straight);
+    QCOMPARE(coaster->activeSection, editor->selSection->sectionData);
+    QVERIFY(editor->selSection->listItem->isSelected());
+    QVERIFY(straightFrame->isVisible());
+    QVERIFY(!builderFrame->isVisible());
     glView->doneCurrent();
 }
 

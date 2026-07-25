@@ -29,6 +29,7 @@
 #include <QMenu>
 #include <QKeyEvent>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <cmath>
 
 extern MainWindow* gloParent;
@@ -590,9 +591,11 @@ int trackWidget::getSection(QTreeWidgetItem *item)
 
 void trackWidget::on_deleteButton_released()
 {
-    QTreeWidgetItem* selected = ui->sectionListWidget->selectedItems().at(0);
+    const QList<QTreeWidgetItem*> selectedItems = ui->sectionListWidget->selectedItems();
+    if(selectedItems.isEmpty()) return;
 
-    int index = getSection(selected);
+    const int index = getSection(selectedItems.first());
+    if(index <= 0 || index >= sectionList.size()) return;
 
     if(!inTrack->mUndoHandler->busy) {
         undoAction* temp = new undoAction(inTrack, removeSegment);
@@ -600,9 +603,17 @@ void trackWidget::on_deleteButton_released()
         gloParent->setUndoButtons();
     }
 
-    inTrack->trackData->removeSection(index-1);
-    delete sectionList[index];
-    sectionList.removeAt(index);
+    {
+        // Deleting the selected tree item emits itemSelectionChanged midway
+        // through the mutation. Defer that update until the model and list
+        // agree, then restore the preceding piece (or the anchor).
+        const QSignalBlocker blockSelection(ui->sectionListWidget);
+        selSection = NULL;
+        inTrack->trackData->removeSection(index-1);
+        delete sectionList[index];
+        sectionList.removeAt(index);
+        sectionList[index-1]->listItem->setSelected(true);
+    }
 
     gloParent->updateInfoPanel();
 
